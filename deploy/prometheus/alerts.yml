@@ -1,0 +1,38 @@
+groups:
+  - name: agentic-api
+    rules:
+      - alert: High5xxRatio
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "High 5xx ratio" }
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "p95 latency > 500ms" }
+      - alert: ReadinessFailing
+        expr: probe_success{job="api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Readiness failing" }
+      - alert: JobsOldestQueuedHigh
+        expr: jobs_oldest_queued_age_seconds > 300
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Jobs queue is behind" }
+      - alert: FailedJobsGrowing
+        expr: increase(jobs_processed_total{outcome="FAILED"}[15m]) > 10
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: "Failed jobs growing" }
+      - alert: ActivityDropped
+        expr: increase(activity_dropped_total[10m]) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Activity entries dropped" }
+      - alert: CacheErrorRate
+        expr: sum(rate(cache_operations_total{result="error"}[5m])) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Cache backend errors" }

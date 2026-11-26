@@ -1,0 +1,47 @@
+[project]
+name = "agentic-api"
+version = "0.3.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi", "uvicorn[standard]", "pydantic>=2", "pydantic-settings", "email-validator",
+  "prisma", "mcp", "pyjwt", "pwdlib[argon2]", "orjson", "tzdata", "redis",
+  "prometheus-client", "aiosmtplib",
+]
+
+[project.optional-dependencies]
+observability = [
+  "sentry-sdk[fastapi]", "opentelemetry-sdk", "opentelemetry-exporter-otlp",
+  "opentelemetry-instrumentation-fastapi",
+]
+
+[dependency-groups]
+dev = [
+  "pytest", "pytest-asyncio", "httpx", "ruff", "mypy",
+  "pytest-cov", "bandit", "pip-audit", "pre-commit", "asgi-lifespan",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are immutable-call safe (Depends/Query/etc. in defaults).
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Security", "fastapi.Header", "fastapi.Cookie", "fastapi.Form", "fastapi.File"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = ["integration: requires a real database/redis (TEST_DATABASE_URL / TEST_REDIS_URL)"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["prisma.*", "mcp.*", "redis.*"]
+ignore_missing_imports = true

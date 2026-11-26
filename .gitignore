@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Environment
+.env
+
+# Testing / linting caches
+.pytest_cache/
+.ruff_cache/
+
+# Logs
+*.log
+
+# Prisma generated artifacts
+prisma/migrations/dev.db*
+*.db
+prisma/*.db
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

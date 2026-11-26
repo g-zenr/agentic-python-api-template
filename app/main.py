@@ -1,0 +1,105 @@
+"""Application factory. NEVER edit this to add a feature: routers and tools are auto-discovered.
+
+Infrastructure (DB, cache, activity, embedded worker, MCP, metrics, observability) is wired here.
+Adding a job, cached read or audit event never requires editing this file.
+"""
+
+import asyncio
+import logging
+import secrets
+from contextlib import AsyncExitStack, asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
+
+from app.core.activity import activity
+from app.core.cache import close_cache
+from app.core.config import settings
+from app.core.database import connect_db, disconnect_db
+from app.core.discovery import feature_modules
+from app.core.exceptions import register_exception_handlers
+from app.core.jobs import Worker, get_store
+from app.core.logging import configure_logging
+from app.core.mcp import ApiKeyGate, attach_tools, mcp  # MCP (remove with core/mcp.py)
+from app.core.metrics import render_metrics
+from app.core.middleware import install_middleware
+from app.core.observability import setup_otel, setup_sentry
+
+log = logging.getLogger(__name__)
+
+
+async def _shutdown_worker(stop: asyncio.Event, task: asyncio.Task) -> None:  # INFRA
+    stop.set()
+    await task
+
+
+def _metrics_guard(request: Request) -> bool:
+    token = settings.metrics_token
+    if token is None:
+        return True
+    sent = request.headers.get("authorization", "")
+    return secrets.compare_digest(sent, f"Bearer {token.get_secret_value()}")
+
+
+def create_app() -> FastAPI:
+    configure_logging()
+    setup_sentry()
+    feature_modules("jobs")  # INFRA: the API must know every @job_handler to validate enqueue
+    if settings.env == "prod" and settings.cache_backend == "memory":  # INFRA
+        log.warning(
+            "cache backend is 'memory' in prod: it is per-process and cannot be "
+            "invalidated across processes; use redis"
+        )
+    mcp_app = None
+    if settings.mcp_enabled:  # MCP
+        feature_modules("tools")  # MCP: importing registers every @mcp_tool
+        attach_tools()  # MCP
+        mcp_app = mcp.streamable_http_app()  # MCP: build before lifespan starts
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with AsyncExitStack() as stack:
+            await connect_db()
+            stack.push_async_callback(disconnect_db)
+            stack.push_async_callback(close_cache)  # INFRA
+            await activity.start()  # INFRA
+            stack.push_async_callback(activity.stop)  # INFRA: flush before DB disconnect
+            if settings.worker_embedded:  # INFRA
+                stop = asyncio.Event()
+                task = asyncio.create_task(Worker(get_store()).run(stop))
+                stack.push_async_callback(_shutdown_worker, stop, task)  # INFRA
+            if settings.mcp_enabled:  # MCP
+                await stack.enter_async_context(mcp.session_manager.run())  # MCP
+            try:
+                yield
+            finally:
+                app.state.shutting_down = True  # INFRA: readiness fails fast during shutdown
+
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        lifespan=lifespan,
+        docs_url=None if settings.env == "prod" else "/docs",
+        redoc_url=None,
+    )
+    app.state.shutting_down = False
+    install_middleware(app)
+    register_exception_handlers(app)
+    for module in feature_modules("router"):
+        app.include_router(module.router, prefix=settings.api_prefix)
+    if settings.metrics_enabled:  # INFRA
+
+        @app.get("/metrics", include_in_schema=False)  # INFRA
+        async def metrics(request: Request) -> Response:
+            if not _metrics_guard(request):
+                return Response("unauthorized", status_code=401)
+            body, content_type = render_metrics()
+            return Response(body, media_type=content_type)
+
+    if mcp_app is not None:  # MCP
+        app.mount(settings.mcp_mount_path, ApiKeyGate(mcp_app))  # MCP
+    setup_otel(app)
+    return app
+
+
+app = create_app()
