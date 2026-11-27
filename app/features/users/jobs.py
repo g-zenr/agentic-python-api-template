@@ -7,14 +7,14 @@ from app.core.activity.repository import activity_repo
 from app.core.audit.repository import audit_repo
 from app.core.constants import AuditAction, AuditResource, JobType
 from app.core.jobs import JobContext, job_handler
+from app.core.uow import transaction
+from app.features.notes.schemas import NoteOut
 from app.features.users.repository import users_repo
 from app.features.users.schemas import AccountErasePayload, UserOut
-from app.features.notes.schemas import NoteOut
-from app.core.uow import transaction
 from app.shared.helpers.pagination import PageParams
 
 
-@job_handler(JobType.ACCOUNT_ERASE, payload_model=AccountErasePayload)
+@job_handler(JobType.ACCOUNT_ERASE, payload=AccountErasePayload)
 async def account_erase(ctx: JobContext, payload: AccountErasePayload) -> dict[str, Any]:
     """Delete the user (cascades) and scrub PII from logs. Idempotent: a missing user is a no-op."""
     user_id = payload.user_id
@@ -41,8 +41,8 @@ async def account_export(ctx: JobContext) -> dict[str, Any]:
         return {"profile": None, "notes": [], "audit": []}
     from app.features.notes.repository import notes_repo
 
-    notes = []
-    audit_rows = []
+    notes: list[Any] = []
+    audit_rows: list[Any] = []
     for repo, where, output in (
         (notes_repo, {"user_id": user_id}, notes),
         (audit_repo, {"actor_id": user_id}, audit_rows),
