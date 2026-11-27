@@ -17,7 +17,7 @@ from app.core.constants import ActorType, JobPolicy
 from app.core.context import RequestContext, request_ctx, request_id_var
 from app.core.exceptions import AppError
 from app.core.jobs import registry
-from app.core.jobs.store import JobStore
+from app.core.jobs.store import JobStore, claim_attempt
 from app.core.jobs.types import JobCancelled, JobContext, JobRecord, PermanentError
 from app.core.messages import Msg
 from app.core.metrics import (
@@ -89,6 +89,7 @@ async def _fail(job: JobRecord, store: JobStore, msg: Msg, *, retry: bool) -> No
 async def execute(job: JobRecord, store: JobStore) -> None:
     """Run ONE claimed job to a terminal or retry state. Never raises (except task cancellation)."""
     _bind_job_context(job)
+    attempt_token = claim_attempt.set(job.attempts)
     beat = asyncio.create_task(_heartbeat(job.id, store))
     started = time.perf_counter()
     outcome = "failed"
@@ -110,6 +111,7 @@ async def execute(job: JobRecord, store: JobStore) -> None:
         await _fail(job, store, Msg.INTERNAL_ERROR, retry=True)
     finally:
         beat.cancel()
+        claim_attempt.reset(attempt_token)
         jobs_processed_total.labels(type=job.type, outcome=outcome).inc()
         job_duration_seconds.labels(type=job.type).observe(time.perf_counter() - started)
 
