@@ -76,6 +76,7 @@ async def delete_me(user: User, password: str) -> None:
             JobType.ACCOUNT_ERASE,
             AccountErasePayload(user_id=user.id),
             user_id=None,
+            idempotency_key=f"account-erase:{user.id}",
             delay_seconds=settings.account_erase_delay_days * 86400,
         )
     await after_commit(lambda: find.invalidate(user.id))
