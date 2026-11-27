@@ -6,7 +6,6 @@ __pycache__/
 venv/
 
 # Environment
-.env
 
 # Testing / linting caches
 .pytest_cache/
@@ -27,8 +26,8 @@ Thumbs.db
 
 # IDE
 .idea/
-.vscode/.coverage
 
 .coverage
 .coverage.*
 htmlcov/
+config.bat
