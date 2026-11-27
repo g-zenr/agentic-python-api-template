@@ -22,6 +22,9 @@ async def account_erase(ctx: JobContext, payload: AccountErasePayload) -> dict[s
     """Delete the user (cascades) and scrub PII from logs. Idempotent: a missing user is a no-op."""
     user_id = payload.user_id
     async with transaction():
+        await current_db().query_raw(
+            "SELECT id FROM users WHERE id = $1 FOR UPDATE", user_id
+        )
         user = await users_repo.get(user_id)
         if user is not None:
             if user.deleted_at is None or user.is_active:
@@ -29,7 +32,8 @@ async def account_erase(ctx: JobContext, payload: AccountErasePayload) -> dict[s
             await users_repo.delete(user_id)
         await audit_repo.scrub_pii_for_actor(user_id)
         await activity_repo.scrub_ip_for_user(user_id)
-        await audit.record(AuditAction.ACCOUNT_ERASE, AuditResource.USER, user_id)
+        if user is not None:
+            await audit.record(AuditAction.ACCOUNT_ERASE, AuditResource.USER, user_id)
     return {"deleted": user is not None}  # scrub still ran; re-runs stay no-ops
 
 

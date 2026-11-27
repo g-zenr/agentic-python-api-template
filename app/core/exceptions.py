@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Match
 
 from app.core.constants import ErrorCode, Header
 from app.core.i18n import t
@@ -127,14 +128,23 @@ def register_exception_handlers(app: FastAPI) -> None:
         return _error(422, ErrorCode.VALIDATION, t(Msg.VALIDATION_ERROR), details)
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+    async def _http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        headers = dict(exc.headers or {})
+        if exc.status_code == 405:
+            methods: set[str] = set()
+            for route in app.routes:
+                match, _ = route.matches(request.scope)
+                if match == Match.PARTIAL:
+                    methods.update(getattr(route, "methods", None) or ())
+            if methods:
+                headers["Allow"] = ", ".join(sorted(methods))
         missing = exc.status_code == 404
         code = ErrorCode.NOT_FOUND if missing else ErrorCode.INTERNAL
         return _error(
             exc.status_code,
             code,
             t(Msg.NOT_FOUND if missing else Msg.INTERNAL_ERROR),
-            headers=exc.headers,
+            headers=headers,
         )
 
     @app.exception_handler(Exception)

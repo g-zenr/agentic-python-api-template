@@ -111,7 +111,11 @@ async def execute(job: JobRecord, store: JobStore) -> None:
         await _fail(job, store, Msg.INTERNAL_ERROR, retry=True)
     finally:
         beat.cancel()
-        claim_attempt.reset(attempt_token)
+        try:
+            with contextlib.suppress(asyncio.CancelledError):
+                await beat
+        finally:
+            claim_attempt.reset(attempt_token)
         jobs_processed_total.labels(type=job.type, outcome=outcome).inc()
         job_duration_seconds.labels(type=job.type).observe(time.perf_counter() - started)
 
