@@ -71,7 +71,7 @@ async def recover_erasure(ctx: JobContext) -> dict[str, Any]:
     rows = await current_db().query_raw(
         "SELECT id FROM users WHERE deleted_at <= $1 AND is_active = false "
         "AND NOT EXISTS (SELECT 1 FROM jobs WHERE type = 'account.erase' "
-        "AND status IN ('QUEUED', 'RUNNING') AND payload->>'user_id' = users.id) "
+        "AND status IN ('QUEUED', 'RUNNING') AND payload->>'user_id' = users.id::text) "
         "ORDER BY deleted_at LIMIT 100;",
         cutoff,
     )
