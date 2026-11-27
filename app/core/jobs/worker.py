@@ -68,6 +68,7 @@ async def _invoke(job: JobRecord, store: JobStore) -> dict[str, Any] | None:
     )
     async with asyncio.timeout(handler.timeout):
         result = await handler.fn(*args)
+    await ctx.raise_if_cancelled()
     if result is not None and len(jsonx.dumps(result)) > JobPolicy.RESULT_MAX_BYTES:
         raise PermanentError(Msg.JOB_RESULT_TOO_LARGE)
     return result
