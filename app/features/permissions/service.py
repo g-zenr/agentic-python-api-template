@@ -13,6 +13,7 @@ from prisma.models import User
 from app.core import audit, authz
 from app.core.constants import (
     AuditAction,
+    AuditReason,
     AuditResource,
     GrantCondition,
     GrantEffect,
@@ -87,7 +88,7 @@ async def _assert_can_manage_target(actor: User, target_user_id: str) -> User:
     target = await _target_user(target_user_id)
     if not _is_role_admin(actor):
         holder = await authz.allowed(target, Permission.PERMISSIONS_MANAGE)
-        if holder.allowed:
+        if holder.allowed or holder.reason == AuditReason.POLICY_ERROR:
             raise ForbiddenError(Msg.FORBIDDEN, details={"target": "permissions manager"})
     return target
 
@@ -139,13 +140,13 @@ async def replace_grants(
     actor: User, target_user_id: str, payload: GrantsIn, *, if_match: str | None = None
 ) -> EffectiveOut:
     """Replace the target user's grant set. Audited; cached effective set invalidated."""
-    target = await _assert_can_manage_target(actor, target_user_id)
     cat = catalog()
     for grant in payload.grants:
         _validate_grant(grant, cat)
 
     async with transaction():
-        await permission_grant_repo.lock_user(target.id)
+        await permission_grant_repo.lock_user(target_user_id)
+        target = await _assert_can_manage_target(actor, target_user_id)
         if if_match is not None and if_match.strip() != grants_etag(
             target.id, await effective(target)
         ):
@@ -164,16 +165,16 @@ async def replace_grants(
             before={"grants": len(before)},
             after={"grants": len(rows)},
         )
-    return await effective(target)
+        return await effective(target)
 
 
 async def delete_grant(actor: User, target_user_id: str, grant_id: str) -> None:
-    target = await _assert_can_manage_target(actor, target_user_id)
-    row = await permission_grant_repo.get(grant_id)
-    if row is None or row["user_id"] != target.id:
-        raise NotFoundError(Msg.PERMISSION_NOT_FOUND)
     async with transaction():
-        await permission_grant_repo.lock_user(target.id)
+        await permission_grant_repo.lock_user(target_user_id)
+        target = await _assert_can_manage_target(actor, target_user_id)
+        row = await permission_grant_repo.get(grant_id)
+        if row is None or row["user_id"] != target.id:
+            raise NotFoundError(Msg.PERMISSION_NOT_FOUND)
         if not await permission_grant_repo.delete(grant_id):
             raise NotFoundError(Msg.PERMISSION_NOT_FOUND)
         await audit.record(
@@ -183,7 +184,6 @@ async def delete_grant(actor: User, target_user_id: str, grant_id: str) -> None:
             actor_id=actor.id,
             metadata={"removed": f"{row['resource']}:{row['action']}"},
         )
-    await after_commit(lambda: _load_grants.invalidate(target.id))
 
 
 async def purge_expired() -> int:
