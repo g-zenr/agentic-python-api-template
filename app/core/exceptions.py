@@ -131,7 +131,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         missing = exc.status_code == 404
         code = ErrorCode.NOT_FOUND if missing else ErrorCode.INTERNAL
         return _error(
-            exc.status_code, code, t(Msg.NOT_FOUND if missing else Msg.INTERNAL_ERROR),
+            exc.status_code,
+            code,
+            t(Msg.NOT_FOUND if missing else Msg.INTERNAL_ERROR),
             headers=exc.headers,
         )
 
