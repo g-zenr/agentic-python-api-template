@@ -19,7 +19,6 @@ from app.core.uow import current_db
 from app.shared.helpers.pagination import PageParams
 from app.shared.utils.time import utcnow
 
-
 claim_attempt: ContextVar[int | None] = ContextVar("claim_attempt", default=None)
 
 
