@@ -29,3 +29,7 @@ class UserUpdate(ApiModel):
         if value is not None and value not in settings.supported_locales:
             raise ValueError(f"locale must be one of {settings.supported_locales}")
         return value
+
+
+class AccountErasePayload(ApiModel):
+    user_id: str

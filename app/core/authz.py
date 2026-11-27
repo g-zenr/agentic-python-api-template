@@ -1,8 +1,7 @@
 """Policy Decision Point (PDP): hybrid RBAC + ABAC permission decisions.
 
 Effective access = role baseline ∪ ALLOW grants − DENY grants (a DENY always wins), with
-`expires_at` honoured and optional ABAC conditions on grants. Grants are cached per user id
-(`CacheNS.PERMISSIONS`); backend errors degrade to baseline-only decisions, or deny outright
+`expires_at` honoured and optional ABAC conditions on grants. Grants are read directly from the database; backend errors degrade to baseline-only decisions, or deny outright
 when `AUTHZ_FAIL_CLOSED` is set (required in production). Call sites stay unchanged:
 `require_permission` and the services consult this module instead of the raw role matrix.
 
@@ -17,12 +16,9 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from app.core.cache import cached
 from app.core.config import settings
 from app.core.constants import (
     AuditReason,
-    CacheNS,
-    CacheTTL,
     GrantCondition,
     Permission,
     Role,
@@ -50,7 +46,6 @@ class Subject(BaseModel):
     role: str
 
 
-@cached(CacheNS.PERMISSIONS, CacheTTL.SHORT, key=lambda user_id: user_id, type_=dict)
 async def _load_grants(user_id: str) -> dict[str, list[str]]:
     """Load the user's grant rows as {allow, deny, scoped_own} sets of `resource:action` keys."""
     rows = await current_db().query_raw(
@@ -132,7 +127,7 @@ async def read_scope(user: Any, permission: Permission) -> str | None:
     """
     grants = await _grants_for(user.id)
     key = permission.value
-    if key in grants["deny"]:
+    if "error" in grants or key in grants["deny"]:
         return None
     if role_has_permission(Role(str(user.role)), permission):
         return "all"

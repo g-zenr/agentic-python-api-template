@@ -17,10 +17,18 @@ def to_plain(obj: Any) -> dict[str, Any] | None:
     return dict(obj)
 
 
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return redact(value)
+    if isinstance(value, (list, tuple)):
+        return [_redact_value(item) for item in value]
+    return value
+
+
 def redact(data: Mapping[str, Any]) -> dict[str, Any]:
     """Mask secret fields (recursively). Field list: Redaction.FIELDS."""
     return {
-        k: Redaction.MASK if k in Redaction.FIELDS else redact(v) if isinstance(v, Mapping) else v
+        k: Redaction.MASK if k.lower() in Redaction.FIELDS else _redact_value(v)
         for k, v in data.items()
     }
 
@@ -31,9 +39,9 @@ def diff(before: Any, after: Any) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for key in sorted((b.keys() | a.keys()) - Redaction.IGNORED):
         if b.get(key) != a.get(key):
-            masked = key in Redaction.FIELDS
+            masked = key.lower() in Redaction.FIELDS
             out[key] = {
-                "from": Redaction.MASK if masked else b.get(key),
-                "to": Redaction.MASK if masked else a.get(key),
+                "from": Redaction.MASK if masked else _redact_value(b.get(key)),
+                "to": Redaction.MASK if masked else _redact_value(a.get(key)),
             }
     return out

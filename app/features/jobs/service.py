@@ -79,7 +79,9 @@ async def cancel(user: User, job_id: str) -> tuple[JobOut, Msg]:
     store = get_store()
     job = await _owned(user, job_id, write=True)
     before = to_out(job)
-    if job.status in {s.value for s in TERMINAL_JOB_STATUSES}:
+    if job.type == JobType.ACCOUNT_ERASE.value or job.status in {
+        s.value for s in TERMINAL_JOB_STATUSES
+    }:
         raise ConflictError(Msg.JOB_NOT_CANCELLABLE)
 
     async with transaction():

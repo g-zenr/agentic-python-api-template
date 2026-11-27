@@ -17,7 +17,7 @@ from app.core.uow import after_commit, transaction
 from app.features.jobs import service as jobs_service
 from app.features.jobs.schemas import JobOut
 from app.features.users.repository import users_repo
-from app.features.users.schemas import UserOut, UserUpdate
+from app.features.users.schemas import AccountErasePayload, UserOut, UserUpdate
 from app.shared.helpers.pagination import PageParams
 from app.shared.utils.time import utcnow
 
@@ -74,6 +74,7 @@ async def delete_me(user: User, password: str) -> None:
         await audit.record(AuditAction.USER_DELETE, AuditResource.USER, user.id)
         await enqueue(
             JobType.ACCOUNT_ERASE,
+            AccountErasePayload(user_id=user.id),
             user_id=None,
             delay_seconds=settings.account_erase_delay_days * 86400,
         )
@@ -123,9 +124,6 @@ async def create_admin(email: str, password: str, promote: bool) -> None:
                 )
                 user_id = user.id
             await audit.record(AuditAction.ADMIN_BOOTSTRAP, AuditResource.USER, user_id)
-        if existing is not None:  # role changed -> the user's cached grants/baseline is stale
-            from app.core.authz import _load_grants
-
-            await after_commit(lambda: _load_grants.invalidate(existing.id))
+        await after_commit(lambda: find.invalidate(user_id))
     finally:
         request_ctx.reset(ctx_token)

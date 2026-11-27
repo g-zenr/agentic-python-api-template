@@ -51,11 +51,11 @@ class Cache:
         await self._safe(self.backend.delete(key))
 
     async def rate_hit(self, bucket: str, identity: str, limit: int, window: int) -> int:
-        """Count one hit; return retry-after seconds (0 when allowed). Fail-open on backend errors."""  # noqa: E501
+        """Count one hit; return retry-after seconds (0 when allowed). Fail closed for sensitive buckets on backend errors."""  # noqa: E501
         key = self.key(CacheNS.RATE, bucket, identity)
         result = await self._safe(self.backend.incr_window(key, window))
         if result is None:
-            return 0
+            return window if bucket != "global_ip" else 0
         count, remaining = result
         return remaining if count > limit else 0
 

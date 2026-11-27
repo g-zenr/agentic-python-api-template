@@ -1,5 +1,6 @@
 """HTTP middleware: trusted hosts, body-size limit, request context, activity, security headers."""
 
+import re
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -84,7 +85,8 @@ def _security_headers() -> dict[str, str]:
 
 
 async def context_middleware(request: Request, call_next: Callable[..., Awaitable[Any]]) -> Any:
-    rid = request.headers.get(Header.REQUEST_ID) or uuid4().hex
+    candidate = request.headers.get(Header.REQUEST_ID, "")
+    rid = candidate if re.fullmatch(r"[A-Za-z0-9._-]{1,128}", candidate) else uuid4().hex
     request_id_var.set(rid)
     locale_var.set(resolve_locale(request.headers.get(Header.LOCALE)))
     ctx = RequestContext(
@@ -128,7 +130,7 @@ async def context_middleware(request: Request, call_next: Callable[..., Awaitabl
 def _record_http_metrics(request: Request, status: str, started: float) -> None:
     """Emit http_requests_total + http_request_duration_seconds using the route TEMPLATE."""
     route = request.scope.get("route")
-    template = getattr(route, "path", request.url.path)
+    template = getattr(route, "path", "<unmatched>")
     method = request.method
     http_requests_total.labels(method=method, route=template, status=status).inc()
     http_request_duration_seconds.labels(method=method, route=template).observe(

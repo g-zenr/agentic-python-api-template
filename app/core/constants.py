@@ -222,7 +222,11 @@ class Activity:
 
 class Redaction:
     FIELDS: frozenset[str] = frozenset(
-        {"password", "password_hash", "token", "access_token", "secret"}
+        {
+            "password", "password_hash", "token", "access_token", "secret",
+            "refresh_token", "token_hash", "authorization", "api_key", "cookie",
+            "reset_token", "verification_token", "client_secret",
+        }
     )
     IGNORED: frozenset[str] = frozenset({"updated_at"})
     MASK: str = "***"

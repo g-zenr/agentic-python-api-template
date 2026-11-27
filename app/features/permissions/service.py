@@ -11,7 +11,6 @@ from typing import Any
 from prisma.models import User
 
 from app.core import audit, authz
-from app.core.authz import _load_grants
 from app.core.constants import (
     AuditAction,
     AuditResource,
@@ -20,10 +19,10 @@ from app.core.constants import (
     Permission,
     Role,
 )
-from app.core.exceptions import BadInputError, ForbiddenError, NotFoundError
+from app.core.exceptions import BadInputError, ForbiddenError, NotFoundError, PreconditionFailedError
 from app.core.messages import Msg
 from app.core.permissions import ROLE_PERMISSIONS
-from app.core.uow import after_commit, transaction
+from app.core.uow import transaction
 from app.features.permissions.repository import permission_grant_repo
 from app.features.permissions.schemas import (
     CatalogOut,
@@ -33,6 +32,7 @@ from app.features.permissions.schemas import (
     GrantsIn,
 )
 from app.features.users.repository import users_repo
+from app.shared.helpers.http import etag_for
 
 
 def catalog() -> CatalogOut:
@@ -129,7 +129,15 @@ async def list_effective(target_user_id: str) -> EffectiveOut:
     return await effective(target)
 
 
-async def replace_grants(actor: User, target_user_id: str, payload: GrantsIn) -> EffectiveOut:
+def grants_etag(user_id: str, state: EffectiveOut) -> str:
+    return etag_for(
+        user_id, len(state.grants), sorted(g.model_dump_json() for g in state.grants)
+    )
+
+
+async def replace_grants(
+    actor: User, target_user_id: str, payload: GrantsIn, *, if_match: str | None = None
+) -> EffectiveOut:
     """Replace the target user's grant set. Audited; cached effective set invalidated."""
     target = await _assert_can_manage_target(actor, target_user_id)
     cat = catalog()
@@ -137,6 +145,11 @@ async def replace_grants(actor: User, target_user_id: str, payload: GrantsIn) ->
         _validate_grant(grant, cat)
 
     async with transaction():
+        await permission_grant_repo.lock_user(target.id)
+        if if_match is not None and if_match.strip() != grants_etag(
+            target.id, await effective(target)
+        ):
+            raise PreconditionFailedError(Msg.PRECONDITION_FAILED)
         before = await permission_grant_repo.list_for_user(target.id)
         rows = await permission_grant_repo.replace_for_user(
             target.id,
@@ -151,7 +164,6 @@ async def replace_grants(actor: User, target_user_id: str, payload: GrantsIn) ->
             before={"grants": len(before)},
             after={"grants": len(rows)},
         )
-    await after_commit(lambda: _load_grants.invalidate(target.id))
     return await effective(target)
 
 
@@ -161,6 +173,7 @@ async def delete_grant(actor: User, target_user_id: str, grant_id: str) -> None:
     if row is None or row["user_id"] != target.id:
         raise NotFoundError(Msg.PERMISSION_NOT_FOUND)
     async with transaction():
+        await permission_grant_repo.lock_user(target.id)
         if not await permission_grant_repo.delete(grant_id):
             raise NotFoundError(Msg.PERMISSION_NOT_FOUND)
         await audit.record(

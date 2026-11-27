@@ -116,7 +116,12 @@ async def login(payload: LoginIn) -> TokenOut:
     if await peek(RateBucket.LOGIN_ACCOUNT, account) >= 5:
         raise UnauthorizedError(Msg.AUTH_INVALID_CREDENTIALS)
     user = await users_repo.find_by_email(email)
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if (
+        user is None
+        or not user.is_active
+        or user.deleted_at is not None
+        or not verify_password(payload.password, user.password_hash)
+    ):
         reason = AuditReason.UNKNOWN_EMAIL if user is None else AuditReason.BAD_PASSWORD
         await audit.record(
             AuditAction.AUTH_LOGIN_FAILED,
