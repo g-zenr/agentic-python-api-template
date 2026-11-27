@@ -8,7 +8,6 @@ from app.core.config import settings
 from app.core.constants import ActorType, AuditAction, AuditOutcome, AuditResource, Limits
 from app.core.context import current
 from app.core.uow import in_transaction
-from app.shared.utils import json as jsonx
 from app.shared.utils.diff import diff, redact
 from app.shared.utils.text import truncate
 
@@ -67,7 +66,7 @@ async def record(
     try:
         await _sink.append(entry)
     except Exception:
-        log.error("audit write failed: %s", jsonx.dumps(entry), exc_info=True)
+        log.error("audit write failed for action %s", action.value, exc_info=True)
         # Inside a transaction an audit failure ALWAYS propagates (the mutation rolls back).
         if settings.audit_fail_closed or in_transaction():
             raise

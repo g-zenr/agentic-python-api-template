@@ -12,7 +12,7 @@ from typing import Any, Protocol, cast
 
 import prisma
 from app.core.constants import TERMINAL_JOB_STATUSES, JobStatus
-from app.core.jobs.types import JobRecord
+from app.core.jobs.types import JobCancelled, JobRecord
 from app.core.messages import Msg
 from app.core.uow import current_db
 from app.shared.helpers.pagination import PageParams
@@ -124,8 +124,8 @@ class PrismaJobStore:
         return bool(row and row.cancel_requested)
 
     async def succeed(self, job_id: str, result: dict[str, Any] | None) -> None:
-        await self.d.update(
-            where={"id": job_id},
+        count = await self.d.update_many(
+            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": False},
             data={
                 "status": JobStatus.SUCCEEDED.value,
                 "progress": 100,
@@ -134,6 +134,9 @@ class PrismaJobStore:
                 "locked_by": None,
             },
         )
+
+        if count != 1:
+            raise JobCancelled
 
     async def fail(self, job_id: str, error: Msg, *, retry_at: datetime | None) -> None:
         if retry_at is not None:
@@ -150,11 +153,16 @@ class PrismaJobStore:
                 "finished_at": utcnow(),
                 "locked_by": None,
             }
-        await self.d.update(where={"id": job_id}, data=data)
+        count = await self.d.update_many(
+            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": False},
+            data=data,
+        )
+        if count != 1:
+            await self.cancelled(job_id)
 
     async def cancelled(self, job_id: str) -> None:
-        await self.d.update(
-            where={"id": job_id},
+        await self.d.update_many(
+            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": True},
             data={"status": JobStatus.CANCELLED.value, "finished_at": utcnow(), "locked_by": None},
         )
 
@@ -196,7 +204,10 @@ class PrismaJobStore:
         return cast(int, result) == 1
 
     async def request_cancel(self, job_id: str) -> None:
-        await self.d.update(where={"id": job_id}, data={"cancel_requested": True})
+        await self.d.update_many(
+            where={"id": job_id, "status": JobStatus.RUNNING.value},
+            data={"cancel_requested": True},
+        )
 
     async def purge_finished_before(self, cutoff: datetime) -> int:
         result = await self.d.delete_many(

@@ -78,12 +78,13 @@ async def put_grants(
         raise PreconditionRequiredError(Msg.PRECONDITION_REQUIRED)
     if key:  # H1: retries are deduped; a repeated key replays the stored response
         status_code, data, replay = await run_once(
-            f"permissions:{user_id}",
+            f"permissions:{user.id}:{user_id}",
             key,
             {"payload": payload.model_dump(mode="json"), "if_match": if_match},
             lambda: _replace(user, user_id, payload, if_match),
         )
         response.status_code = status_code
+        response.headers[Header.ETAG] = _etag(user_id, EffectiveOut.model_validate(data))
         if replay:
             response.headers[Header.IDEMPOTENCY_REPLAY] = "true"
         return ok(data, Msg.PERMISSIONS_UPDATED)
@@ -95,7 +96,7 @@ async def put_grants(
 async def _replace(
     user: CurrentUser, user_id: str, payload: GrantsIn, if_match: str
 ) -> tuple[int, dict[str, Any]]:
-    effective = await service.replace_grants(user, user_id, payload)
+    effective = await service.replace_grants(user, user_id, payload, if_match=if_match)
     return 200, effective.model_dump(mode="json")
 
 

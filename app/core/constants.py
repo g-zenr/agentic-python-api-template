@@ -191,6 +191,7 @@ class JobType(StrEnum):
     AUTH_SEND_TOKEN_EMAIL = "auth.send_token_email"
     ACCOUNT_EXPORT = "account.export"
     ACCOUNT_ERASE = "account.erase"
+    ACCOUNT_ERASE_RECOVERY = "account.erase_recovery"
 
 
 class JobPolicy:

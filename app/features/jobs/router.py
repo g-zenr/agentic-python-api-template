@@ -44,7 +44,7 @@ async def get_job(
 ) -> ApiResponse[Any] | Response:
     job = await service.get(user, job_id)
     etag = etag_for(job.id, job.status, job.progress, job.updated_at)
-    headers = {Header.ETAG: etag, Header.CACHE_CONTROL: CacheControl.REVALIDATE}
+    headers = {Header.ETAG: etag, Header.CACHE_CONTROL: CacheControl.NO_STORE}
     if etag_matches(request, etag):
         return Response(status_code=304, headers=headers)
     response.headers.update(headers)

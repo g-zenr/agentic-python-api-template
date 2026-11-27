@@ -15,7 +15,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.core.cache.backends import CacheBackend, build_backend
 from app.core.config import settings
-from app.core.constants import CacheNS, CacheTTL
+from app.core.constants import CacheNS, CacheTTL, RateBucket
 from app.core.metrics import cache_operations_total
 
 log = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class Cache:
         key = self.key(CacheNS.RATE, bucket, identity)
         result = await self._safe(self.backend.incr_window(key, window))
         if result is None:
-            return window if bucket != "global_ip" else 0
+            return window if bucket != RateBucket.GLOBAL_IP.value else 0
         count, remaining = result
         return remaining if count > limit else 0
 

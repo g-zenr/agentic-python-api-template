@@ -25,6 +25,8 @@ def setup_sentry() -> None:
         request = event.get("request", {})
         request.pop("data", None)
         request.pop("cookies", None)
+        request.pop("headers", None)
+        request.pop("query_string", None)
         return event
 
     sentry_sdk.init(
