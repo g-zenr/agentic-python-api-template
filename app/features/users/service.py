@@ -17,7 +17,7 @@ from app.core.uow import after_commit, transaction
 from app.features.jobs import service as jobs_service
 from app.features.jobs.schemas import JobOut
 from app.features.users.repository import users_repo
-from app.features.users.schemas import UserOut, UserUpdate
+from app.features.users.schemas import AccountErasePayload, UserOut, UserUpdate
 from app.shared.helpers.pagination import PageParams
 from app.shared.utils.time import utcnow
 
@@ -74,7 +74,8 @@ async def delete_me(user: User, password: str) -> None:
         await audit.record(AuditAction.USER_DELETE, AuditResource.USER, user.id)
         await enqueue(
             JobType.ACCOUNT_ERASE,
-            user_id=user.id,
+            AccountErasePayload(user_id=user.id),
+            user_id=None,
             delay_seconds=settings.account_erase_delay_days * 86400,
         )
     await after_commit(lambda: find.invalidate(user.id))
