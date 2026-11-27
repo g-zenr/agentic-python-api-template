@@ -132,7 +132,7 @@ async def read_scope(user: Any, permission: Permission) -> str | None:
     """
     grants = await _grants_for(user.id)
     key = permission.value
-    if key in grants["deny"]:
+    if "error" in grants or key in grants["deny"]:
         return None
     if role_has_permission(Role(str(user.role)), permission):
         return "all"
