@@ -32,9 +32,14 @@ def _decode(row: dict[str, Any]) -> dict[str, Any]:
 class PermissionGrantRepository:
     # B608 suppressed at the call sites below: the only interpolated fragments are the module-level
     # _COLUMNS constant and $n placeholder tokens; every value is a bound parameter.
+    async def lock_user(self, user_id: str) -> None:
+        await current_db().query_raw(
+            "SELECT id FROM users WHERE id = $1 FOR UPDATE;", user_id
+        )
+
     async def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
         rows = await current_db().query_raw(
-            f"SELECT {_COLUMNS} FROM permission_grants WHERE user_id = $1 ORDER BY resource, action;",  # noqa: E501 # nosec B608
+            f"SELECT {_COLUMNS} FROM permission_grants WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now()) ORDER BY resource, action;",  # noqa: E501 # nosec B608
             user_id,
         )
         return [_decode(r) for r in rows]
