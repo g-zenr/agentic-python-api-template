@@ -1,19 +1,27 @@
 """Auth schemas: registration, login, token responses, and account-lifecycle payloads."""
 
+from typing import Annotated
+
 from pydantic import EmailStr, Field
 
 from app.core.constants import Limits, TokenPurpose
 from app.shared.schemas import ApiModel
 
 
+PublicEmail = Annotated[
+    EmailStr,
+    Field(json_schema_extra={"pattern": r"(?i)^(?!.*\.(?:test|invalid|localhost|local|example)$).+$"}),
+]
+
+
 class RegisterIn(ApiModel):
-    email: EmailStr
+    email: PublicEmail
     password: str = Field(min_length=Limits.PASSWORD_MIN, max_length=Limits.PASSWORD_MAX)
     name: str = Field(min_length=1, max_length=Limits.NAME_MAX)
 
 
 class LoginIn(ApiModel):
-    email: EmailStr
+    email: PublicEmail
     password: str
 
 
@@ -42,7 +50,7 @@ class ChangePasswordIn(ApiModel):
 
 
 class ForgotPasswordIn(ApiModel):
-    email: EmailStr
+    email: PublicEmail
 
 
 class ResetPasswordIn(ApiModel):

@@ -87,3 +87,9 @@ async def test_app_metadata_matches_settings():
 
     assert app.title == settings.app_name
     assert app.version == settings.app_version
+
+
+async def test_allow_header_includes_all_resource_methods(client):
+    response = await client.options("/api/v1/notes")
+    assert response.status_code == 405
+    assert {"GET", "POST"} <= {m.strip() for m in response.headers["allow"].split(",")}

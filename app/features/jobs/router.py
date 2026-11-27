@@ -24,9 +24,12 @@ router = APIRouter(prefix="/jobs", tags=[Tag.JOBS])
 )
 async def list_jobs(
     user: CurrentUser,
+    response: Response,
     params: PageParams = Depends(),
     status: JobStatus | None = Query(default=None),
 ) -> ApiResponse[Any]:
+    if response is not None:
+        response.headers[Header.CACHE_CONTROL] = CacheControl.NO_STORE
     items, total = await service.list_jobs(user, params, status)
     data = [service.to_out(i) for i in items]
     return page_of(data, total, params)
@@ -60,6 +63,7 @@ async def get_job(
     description="Cancel a QUEUED job, or request cancellation of a RUNNING job. "
     "Terminal jobs cannot be cancelled.",
 )
-async def cancel_job(job_id: str, user: CurrentUser) -> ApiResponse[Any]:
+async def cancel_job(job_id: str, user: CurrentUser, response: Response) -> ApiResponse[Any]:
+    response.headers[Header.CACHE_CONTROL] = CacheControl.NO_STORE
     job, msg = await service.cancel(user, job_id)
     return ok(job, msg)

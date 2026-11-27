@@ -24,6 +24,8 @@ class AuditRepository(ReadRepository[AuditLog]):
         for field in ("changes", "metadata"):
             if data.get(field) is not None:
                 data[field] = prisma.Json(data[field])
+            else:
+                data.pop(field, None)
         return cast("AuditLog", await self.d.create(data=data))
 
     async def scrub_pii_for_actor(self, actor_id: str) -> int:
