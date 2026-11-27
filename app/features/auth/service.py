@@ -279,7 +279,7 @@ async def reset_password(payload: ResetPasswordIn) -> None:
     ):
         raise UnauthorizedError(Msg.AUTH_ONE_TIME_TOKEN_INVALID)
     user = await users_service_get(record.user_id)
-    if user is None:
+    if user is None or not user.is_active or user.deleted_at is not None:
         raise UnauthorizedError(Msg.AUTH_ONE_TIME_TOKEN_INVALID)
     async with transaction():
         if not await one_time_repo.consume(record.id):
