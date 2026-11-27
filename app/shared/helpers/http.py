@@ -11,11 +11,7 @@ from app.core.constants import Limits
 
 
 def client_ip(request: Request) -> str | None:
-    """Resolve the client IP, honoring `X-Forwarded-For` only when `TRUST_PROXY_HEADERS` is set."""
-    if settings.trust_proxy_headers:
-        forwarded = request.headers.get(Hdr.FORWARDED_FOR)
-        if forwarded:
-            return forwarded.split(",")[0].strip()
+    """Use the ASGI server client address; trusted proxy processing belongs to the server."""
     return request.client.host if request.client else None
 
 
