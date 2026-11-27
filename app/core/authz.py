@@ -17,12 +17,9 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from app.core.cache import cached
 from app.core.config import settings
 from app.core.constants import (
     AuditReason,
-    CacheNS,
-    CacheTTL,
     GrantCondition,
     Permission,
     Role,
@@ -50,7 +47,6 @@ class Subject(BaseModel):
     role: str
 
 
-@cached(CacheNS.PERMISSIONS, CacheTTL.SHORT, key=lambda user_id: user_id, type_=dict)
 async def _load_grants(user_id: str) -> dict[str, list[str]]:
     """Load the user's grant rows as {allow, deny, scoped_own} sets of `resource:action` keys."""
     rows = await current_db().query_raw(
