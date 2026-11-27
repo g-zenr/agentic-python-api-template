@@ -11,7 +11,6 @@ from typing import Any
 from prisma.models import User
 
 from app.core import audit, authz
-from app.core.authz import _load_grants
 from app.core.constants import (
     AuditAction,
     AuditResource,
@@ -23,7 +22,7 @@ from app.core.constants import (
 from app.core.exceptions import BadInputError, ForbiddenError, NotFoundError, PreconditionFailedError
 from app.core.messages import Msg
 from app.core.permissions import ROLE_PERMISSIONS
-from app.core.uow import after_commit, transaction
+from app.core.uow import transaction
 from app.features.permissions.repository import permission_grant_repo
 from app.features.permissions.schemas import (
     CatalogOut,
@@ -163,7 +162,6 @@ async def replace_grants(
             before={"grants": len(before)},
             after={"grants": len(rows)},
         )
-    await after_commit(lambda: _load_grants.invalidate(target.id))
     return await effective(target)
 
 
