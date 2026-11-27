@@ -1,8 +1,7 @@
 """Policy Decision Point (PDP): hybrid RBAC + ABAC permission decisions.
 
 Effective access = role baseline ∪ ALLOW grants − DENY grants (a DENY always wins), with
-`expires_at` honoured and optional ABAC conditions on grants. Grants are cached per user id
-(`CacheNS.PERMISSIONS`); backend errors degrade to baseline-only decisions, or deny outright
+`expires_at` honoured and optional ABAC conditions on grants. Grants are read directly from the database; backend errors degrade to baseline-only decisions, or deny outright
 when `AUTHZ_FAIL_CLOSED` is set (required in production). Call sites stay unchanged:
 `require_permission` and the services consult this module instead of the raw role matrix.
 
