@@ -146,7 +146,9 @@ async def replace_grants(
 
     async with transaction():
         await permission_grant_repo.lock_user(target.id)
-        if if_match is not None and if_match.strip() != grants_etag(target.id, await effective(target)):
+        if if_match is not None and if_match.strip() != grants_etag(
+            target.id, await effective(target)
+        ):
             raise PreconditionFailedError(Msg.PRECONDITION_FAILED)
         before = await permission_grant_repo.list_for_user(target.id)
         rows = await permission_grant_repo.replace_for_user(
