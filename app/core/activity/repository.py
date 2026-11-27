@@ -17,7 +17,7 @@ class ActivityRepository(ReadRepository[ActivityLog]):
         if not entries:
             return 0
         result = await self.d.create_many(data=entries)
-        return len(result) if result is not None else len(entries)
+        return int(result)
 
     async def scrub_ip_for_user(self, user_id: str) -> int:
         """Null IP on this user's activity rows (account erasure)."""
