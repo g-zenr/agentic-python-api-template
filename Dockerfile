@@ -7,10 +7,10 @@ ENV PRISMA_BINARY_CACHE_DIR=/app/.prisma
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev --extra observability
 COPY . .
-RUN uv run prisma generate
+RUN uv run --no-sync prisma generate
 
 FROM python:3.12-slim AS runtime
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /usr/local/bin/
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app /app

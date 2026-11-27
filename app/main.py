@@ -26,6 +26,7 @@ from app.core.mcp import ApiKeyGate, attach_tools, mcp  # MCP (remove with core/
 from app.core.metrics import render_metrics
 from app.core.middleware import install_middleware
 from app.core.observability import setup_otel, setup_sentry
+from app.shared.schemas import ApiResponse
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +84,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         docs_url=None if settings.env == "prod" else "/docs",
         redoc_url=None,
+        responses={
+            code: {"model": ApiResponse[object], "description": description}
+            for code, description in (
+                (400, "Bad request"), (401, "Unauthorized"), (403, "Forbidden"),
+                (404, "Not found"), (405, "Method not allowed"), (409, "Conflict"),
+                (412, "Precondition failed"), (413, "Payload too large"),
+                (422, "Validation failed"), (428, "Precondition required"),
+                (429, "Too many requests"), (500, "Internal server error"),
+                (503, "Service unavailable"),
+            )
+        },
     )
     app.state.shutting_down = False
     install_middleware(app)

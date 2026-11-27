@@ -130,7 +130,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         missing = exc.status_code == 404
         code = ErrorCode.NOT_FOUND if missing else ErrorCode.INTERNAL
-        return _error(exc.status_code, code, t(Msg.NOT_FOUND if missing else Msg.INTERNAL_ERROR))
+        return _error(
+            exc.status_code,
+            code,
+            t(Msg.NOT_FOUND if missing else Msg.INTERNAL_ERROR),
+            headers=exc.headers,
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
