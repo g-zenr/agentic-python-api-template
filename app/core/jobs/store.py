@@ -7,6 +7,7 @@ reimplements this protocol without touching the worker or the feature. All queri
 
 import asyncio
 import json
+from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Protocol, cast
 
@@ -17,6 +18,17 @@ from app.core.messages import Msg
 from app.core.uow import current_db
 from app.shared.helpers.pagination import PageParams
 from app.shared.utils.time import utcnow
+
+
+claim_attempt: ContextVar[int | None] = ContextVar("claim_attempt", default=None)
+
+
+def _claim_where(job_id: str) -> dict[str, Any]:
+    where: dict[str, Any] = {"id": job_id, "status": JobStatus.RUNNING.value}
+    attempt = claim_attempt.get()
+    if attempt is not None:
+        where["attempts"] = attempt
+    return where
 
 
 class JobStore(Protocol):
@@ -114,18 +126,23 @@ class PrismaJobStore:
         return [JobRecord.from_row(r) for r in rows]
 
     async def heartbeat(self, job_id: str) -> None:
-        await self.d.update(where={"id": job_id}, data={"heartbeat_at": utcnow()})
+        await self.d.update_many(where=_claim_where(job_id), data={"heartbeat_at": utcnow()})
 
     async def set_progress(self, job_id: str, percent: int) -> None:
-        await self.d.update(where={"id": job_id}, data={"progress": percent})
+        await self.d.update_many(where=_claim_where(job_id), data={"progress": percent})
 
     async def is_cancel_requested(self, job_id: str) -> bool:
         row = await self.d.find_unique(where={"id": job_id})
+        attempt = claim_attempt.get()
+        if attempt is not None and (
+            row is None or row.attempts != attempt or row.status != JobStatus.RUNNING.value
+        ):
+            return True
         return bool(row and row.cancel_requested)
 
     async def succeed(self, job_id: str, result: dict[str, Any] | None) -> None:
         count = await self.d.update_many(
-            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": False},
+            where={**_claim_where(job_id), "cancel_requested": False},
             data={
                 "status": JobStatus.SUCCEEDED.value,
                 "progress": 100,
@@ -154,7 +171,7 @@ class PrismaJobStore:
                 "locked_by": None,
             }
         count = await self.d.update_many(
-            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": False},
+            where={**_claim_where(job_id), "cancel_requested": False},
             data=data,
         )
         if count != 1:
@@ -162,15 +179,15 @@ class PrismaJobStore:
 
     async def cancelled(self, job_id: str) -> None:
         await self.d.update_many(
-            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": True},
+            where={**_claim_where(job_id), "cancel_requested": True},
             data={"status": JobStatus.CANCELLED.value, "finished_at": utcnow(), "locked_by": None},
         )
 
     async def reap_stale(self, stale_seconds: int) -> int:
         sql = (
-            "UPDATE jobs SET status = CASE WHEN attempts >= max_attempts THEN 'FAILED'::\"JobStatus\" "  # noqa: E501
+            "UPDATE jobs SET status = CASE WHEN cancel_requested THEN 'CANCELLED'::\"JobStatus\" WHEN attempts >= max_attempts THEN 'FAILED'::\"JobStatus\" "  # noqa: E501
             "ELSE 'QUEUED'::\"JobStatus\" END, error = $2, locked_by = NULL, "
-            "finished_at = CASE WHEN attempts >= max_attempts THEN now() ELSE NULL END, updated_at = now() "  # noqa: E501
+            "finished_at = CASE WHEN cancel_requested OR attempts >= max_attempts THEN now() ELSE NULL END, updated_at = now() "  # noqa: E501
             "WHERE status = 'RUNNING'::\"JobStatus\" "
             "AND heartbeat_at < now() - make_interval(secs => $1);"
         )
