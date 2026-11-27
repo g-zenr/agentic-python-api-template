@@ -153,11 +153,16 @@ class PrismaJobStore:
                 "finished_at": utcnow(),
                 "locked_by": None,
             }
-        await self.d.update(where={"id": job_id}, data=data)
+        count = await self.d.update_many(
+            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": False},
+            data=data,
+        )
+        if count != 1:
+            await self.cancelled(job_id)
 
     async def cancelled(self, job_id: str) -> None:
         await self.d.update_many(
-            where={"id": job_id, "status": JobStatus.RUNNING.value},
+            where={"id": job_id, "status": JobStatus.RUNNING.value, "cancel_requested": True},
             data={"status": JobStatus.CANCELLED.value, "finished_at": utcnow(), "locked_by": None},
         )
 
