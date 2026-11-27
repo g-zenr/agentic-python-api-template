@@ -74,7 +74,7 @@ async def delete_me(user: User, password: str) -> None:
         await audit.record(AuditAction.USER_DELETE, AuditResource.USER, user.id)
         await enqueue(
             JobType.ACCOUNT_ERASE,
-            user_id=None,
+            user_id=user.id,
             delay_seconds=settings.account_erase_delay_days * 86400,
         )
     await after_commit(lambda: find.invalidate(user.id))
