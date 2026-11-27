@@ -155,6 +155,8 @@ def _prod_problems(s: "Settings") -> list[str]:
         problems.append("AUDIT_FAIL_CLOSED must be true in production")
     if not s.authz_fail_closed:
         problems.append("AUTHZ_FAIL_CLOSED must be true in production")
+    if not s.rate_limit_enabled:
+        problems.append("RATE_LIMIT_ENABLED must be true in production")
     if not s.require_email_verification:
         problems.append("REQUIRE_EMAIL_VERIFICATION must be true in production")
     if s.email_backend != "console" and s.email_from == "no-reply@example.com":
