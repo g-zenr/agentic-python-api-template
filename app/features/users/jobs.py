@@ -6,10 +6,10 @@ from typing import Any
 from app.core import audit
 from app.core.activity.repository import activity_repo
 from app.core.audit.repository import audit_repo
+from app.core.config import settings
 from app.core.constants import AuditAction, AuditResource, JobType, Schedule
 from app.core.jobs import JobContext, enqueue, job_handler
 from app.core.uow import current_db, transaction
-from app.core.config import settings
 from app.features.notes.schemas import NoteOut
 from app.features.users.repository import users_repo
 from app.features.users.schemas import AccountErasePayload, UserOut
@@ -70,12 +70,17 @@ async def recover_erasure(ctx: JobContext) -> dict[str, Any]:
     cutoff = utcnow() - timedelta(days=settings.account_erase_delay_days)
     rows = await current_db().query_raw(
         "SELECT id FROM users WHERE deleted_at <= $1 AND is_active = false "
-        "ORDER BY deleted_at LIMIT 100;", cutoff
+        "AND NOT EXISTS (SELECT 1 FROM jobs WHERE type = 'account.erase' "
+        "AND status IN ('QUEUED', 'RUNNING') AND payload->>'user_id' = users.id) "
+        "ORDER BY deleted_at LIMIT 100;",
+        cutoff,
     )
     for row in rows:
         await ctx.raise_if_cancelled()
         await enqueue(
-            JobType.ACCOUNT_ERASE, AccountErasePayload(user_id=row["id"]),
-            user_id=None, idempotency_key=f"account-erase-recovery:{row['id']}",
+            JobType.ACCOUNT_ERASE,
+            AccountErasePayload(user_id=row["id"]),
+            user_id=None,
+            idempotency_key=f"account-erase-recovery:{row['id']}:{int(utcnow().timestamp()) // 3600}",
         )
     return {"eligible": len(rows)}
