@@ -5,13 +5,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response
 
 from app.core.constants import Header, Permission, RateBucket, Tag
-from app.core.exceptions import PreconditionFailedError, PreconditionRequiredError
+from app.core.exceptions import PreconditionRequiredError
 from app.core.messages import Msg
 from app.core.ratelimit import by_ip
 from app.features.auth.deps import CurrentUser, require_permission
 from app.features.permissions import service
 from app.features.permissions.schemas import CatalogOut, EffectiveOut, GrantsIn
-from app.shared.helpers.http import IdempotencyKey, IfMatch, etag_for
+from app.shared.helpers.http import IdempotencyKey, IfMatch
 from app.shared.helpers.idempotency import run_once
 from app.shared.helpers.responses import ok
 from app.shared.schemas import ApiResponse
@@ -21,9 +21,7 @@ _manage = require_permission(Permission.PERMISSIONS_MANAGE)
 
 
 def _etag(user_id: str, effective: EffectiveOut) -> str:
-    return etag_for(
-        user_id, len(effective.grants), sorted(g.model_dump_json() for g in effective.grants)
-    )
+    return service.grants_etag(user_id, effective)
 
 
 @router.get(
@@ -76,30 +74,26 @@ async def put_grants(
     key: IdempotencyKey = None,  # noqa: RUF013
     if_match: IfMatch = None,  # noqa: RUF013
 ) -> ApiResponse[Any]:
-    current = await service.list_effective(user_id)
-    etag = _etag(user_id, current)
     if if_match is None:
         raise PreconditionRequiredError(Msg.PRECONDITION_REQUIRED)
-    if if_match.strip() != etag:
-        raise PreconditionFailedError(Msg.PRECONDITION_FAILED)
     if key:  # H1: retries are deduped; a repeated key replays the stored response
         status_code, data, replay = await run_once(
             f"permissions:{user_id}",
             key,
-            payload.model_dump(mode="json"),
-            lambda: _replace(user, user_id, payload),
+            {"payload": payload.model_dump(mode="json"), "if_match": if_match},
+            lambda: _replace(user, user_id, payload, if_match),
         )
         response.status_code = status_code
         if replay:
             response.headers[Header.IDEMPOTENCY_REPLAY] = "true"
         return ok(data, Msg.PERMISSIONS_UPDATED)
-    effective = await service.replace_grants(user, user_id, payload)
+    effective = await service.replace_grants(user, user_id, payload, if_match=if_match)
     response.headers[Header.ETAG] = _etag(user_id, effective)
     return ok(effective, Msg.PERMISSIONS_UPDATED)
 
 
 async def _replace(
-    user: CurrentUser, user_id: str, payload: GrantsIn
+    user: CurrentUser, user_id: str, payload: GrantsIn, if_match: str
 ) -> tuple[int, dict[str, Any]]:
     effective = await service.replace_grants(user, user_id, payload)
     return 200, effective.model_dump(mode="json")
