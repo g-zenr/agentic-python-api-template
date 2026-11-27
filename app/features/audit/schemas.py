@@ -1,6 +1,7 @@
 """Audit feature schemas: read models for audit/activity logs and their query dependencies."""
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import Query
 
@@ -16,8 +17,8 @@ class AuditLogOut(ApiModel):
     resource_type: str
     resource_id: str | None
     outcome: str
-    changes: dict | None
-    metadata: dict | None
+    changes: dict[str, Any] | None
+    metadata: dict[str, Any] | None
     request_id: str | None
     ip: str | None
     user_agent: str | None

@@ -4,7 +4,7 @@
 
 ## What you will learn
 - The response envelope and error-code table.
-- Deprecation policy (`Deprecation`/`Sunset`).
+- Deprecation policy (FastAPI `deprecated=True`).
 - Offset vs cursor pagination, sort/filter.
 - Idempotency and optimistic concurrency (`If-Match`).
 - Rate-limit and polling headers.
@@ -15,8 +15,7 @@ Every response is `ApiResponse` (camelCase). Errors carry a stable `code`:
 PAYLOAD_TOO_LARGE, SERVICE_UNAVAILABLE, PRECONDITION_FAILED, PRECONDITION_REQUIRED`.
 
 ## Versioning & deprecation
-The API is under `/api/v1`. To deprecate, set `deprecated=True` and add the `deprecate(sunset,
-successor)` dependency (sets `Deprecation: true`, `Sunset`, `Link`). Keep for at least one minor
+The API is under `/api/v1`. To deprecate, set `deprecated=True`. Keep for at least one minor
 version before removal.
 
 ## Pagination

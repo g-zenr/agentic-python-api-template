@@ -76,10 +76,10 @@ def _client_tools(name: str | None) -> list[str] | None:
 class ApiKeyGate:
     """ASGI wrapper: require a scoped bearer key from MCP_CLIENTS (open in dev when none set)."""
 
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope["type"] == "http":
             clients = settings.mcp_clients
             if not clients:

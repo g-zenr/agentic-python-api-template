@@ -32,6 +32,8 @@
   "user.email_taken": "Nakarehistro na ang email na iyon.",
   "user.updated": "Na-update ang profile",
   "user.deleted": "Naka-iskedyul nang burahin ang account",
+  "permission.not_found": "Hindi mahanap ang permission grant.",
+  "permission.updated": "Na-update ang mga permission",
   "note.not_found": "Hindi mahanap ang note.",
   "note.created": "Nagawa na ang note",
   "note.updated": "Na-update ang note",

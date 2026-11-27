@@ -14,9 +14,9 @@ middleware; this feature only reads.
 ## Endpoints
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | /api/v1/audit | AdminUser | Search audit entries (actor, action, resource, outcome, time range). |
+| GET | /api/v1/audit | AdminUser (`audit:read`) | Search audit entries (actor, action, resource, outcome, time range). |
 | GET | /api/v1/audit/me | CurrentUser | My own audit entries. |
-| GET | /api/v1/audit/activity | AdminUser | Request activity log (route templates, status, latency). |
+| GET | /api/v1/audit/activity | AdminUser (`activity:read`) | Request activity log (route templates, status, latency). |
 
 ## Data model
 `AuditLog` (`audit_logs`): `occurred_at, actor_id (no FK), actor_type, action, resource_type,
@@ -38,13 +38,16 @@ status_code, duration_ms, request_id, ip`.
 
 ## Dependencies
 - `app/core/audit/repository.py`, `app/core/activity/repository.py`.
-- `app/features/auth/deps.py` (`CurrentUser`, `AdminUser`).
+- `app/features/auth/deps.py` (`CurrentUser`, `require_permission`).
 
 ## Extending
-- New searchable filters: add to `AuditQuery`/`ActivityQuery` and the repository `search`.
+- New searchable filters: add to `AuditQuery`/`ActivityQuery`, apply them in `_audit_where`, and
+  pass through to `paginate_cursor`.
 - New audit actions are declared in `core/constants.py` (`AuditAction`) and recorded by the owner.
 
 ## Change history
 | Version | Date | Type | Summary |
 |---|---|---|---|
 | 0.2.0 | 2026-11-26 | Added | Initial version: read-only audit + activity search endpoints |
+| 0.3.1 | 2026-11-26 | Fixed | Cursor pagination: keyset (seek) paging so pages don't repeat/skip; unknown cursor -> 422 |
+| 0.4.0 | 2026-11-26 | Changed | `scrub_pii_for_actor` moved to repo; removed dead `search`; `require_permission` docs |

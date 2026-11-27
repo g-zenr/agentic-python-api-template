@@ -79,3 +79,4 @@ task. If something is ambiguous, choose the simplest option and record an ADR.
 - [0016 — Static typing and CI gates](decisions/0016-static-typing-and-ci-gates.md)
 - [0017 — PII retention and audit scrubbing](decisions/0017-pii-retention-and-audit-scrubbing.md)
 - [0018 — Installed-version adaptations](decisions/0018-installed-version-adaptations.md)
+- [0019 — ABAC and gradual permissions](decisions/0019-abac-and-gradual-permissions.md)

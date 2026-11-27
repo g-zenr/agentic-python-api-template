@@ -48,7 +48,7 @@ sequenceDiagram
     C->>M: HTTP request (Accept-Language, Authorization)
     M->>M: set request id + locale (ContextVars)
     M->>R: route
-    R->>D: resolve CurrentUser/AdminUser
+    R->>D: resolve CurrentUser + require_permission
     D->>P: load user
     R->>S: call service function
     S->>P: query / mutate

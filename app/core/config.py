@@ -26,7 +26,7 @@ def _read_version() -> str:
         return version(_PACKAGE)
     except PackageNotFoundError:
         pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-        return tomllib.loads(pyproject.read_text("utf-8"))["project"]["version"]
+        return str(tomllib.loads(pyproject.read_text("utf-8"))["project"]["version"])
 
 
 class McpClientConfig(BaseModel):
@@ -113,6 +113,8 @@ class Settings(BaseSettings):
     activity_retention_days: int = 30
     audit_retention_days: int = 365
     audit_fail_closed: bool = False
+    authz_fail_closed: bool = False
+    api_slo_ms: int = 1_000  # speed-test latency SLO (1000 local; 2000 deployed)
     trust_proxy_headers: bool = False
 
     @model_validator(mode="after")
@@ -149,6 +151,14 @@ def _prod_problems(s: "Settings") -> list[str]:
         problems.append("MCP_ENABLED requires at least one MCP_CLIENTS entry in production")
     if s.metrics_enabled and s.metrics_token is None:
         problems.append("METRICS_ENABLED requires METRICS_TOKEN in production")
+    if not s.audit_fail_closed:
+        problems.append("AUDIT_FAIL_CLOSED must be true in production")
+    if not s.authz_fail_closed:
+        problems.append("AUTHZ_FAIL_CLOSED must be true in production")
+    if not s.require_email_verification:
+        problems.append("REQUIRE_EMAIL_VERIFICATION must be true in production")
+    if s.email_backend != "console" and s.email_from == "no-reply@example.com":
+        problems.append("EMAIL_FROM must not be the default 'no-reply@example.com' in production")
     return problems
 
 

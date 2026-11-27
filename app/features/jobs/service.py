@@ -1,8 +1,9 @@
 """Job service: ownership checks, submission, and cancellation over the core job store."""
 
 from prisma.models import User
+from pydantic import BaseModel
 
-from app.core import audit
+from app.core import audit, authz
 from app.core.constants import (
     TERMINAL_JOB_STATUSES,
     AuditAction,
@@ -15,7 +16,6 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.i18n import t
 from app.core.jobs import JobRecord, enqueue, get_store
 from app.core.messages import Msg
-from app.core.permissions import has_permission
 from app.core.uow import transaction
 from app.features.jobs.schemas import JobOut
 from app.shared.helpers.pagination import PageParams
@@ -42,8 +42,13 @@ def to_out(rec: JobRecord) -> JobOut:
 async def _owned(user: User, job_id: str, *, write: bool = False) -> JobRecord:
     """Fetch a job the user may see (own, or any with the read/manage permission) or 404."""
     job = await get_store().get(job_id)
+    if job is None:
+        raise NotFoundError(Msg.JOB_NOT_FOUND)
+    if job.user_id == user.id:
+        return job  # ABAC resource attribute: ownership
     perm = Permission.JOBS_MANAGE_ALL if write else Permission.JOBS_READ_ALL
-    if job is None or (job.user_id != user.id and not has_permission(user.role, perm)):
+    decision = await authz.evaluate(user, perm, resource_owner_id=job.user_id)
+    if not decision.allowed:
         raise NotFoundError(Msg.JOB_NOT_FOUND)
     return job
 
@@ -51,7 +56,7 @@ async def _owned(user: User, job_id: str, *, write: bool = False) -> JobRecord:
 async def submit(
     user: User,
     job_type: JobType,
-    payload=None,
+    payload: BaseModel | None = None,
     *,
     idempotency_key: str | None = None,
 ) -> JobOut:

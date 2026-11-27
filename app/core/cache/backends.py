@@ -3,7 +3,7 @@
 import time
 from collections import OrderedDict
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.core.config import settings
 from app.core.constants import CachePolicy
@@ -78,14 +78,15 @@ class RedisBackend:
     def __init__(self, url: str):
         from redis.asyncio import Redis  # lazy: memory mode needs no Redis
 
-        self._r = Redis.from_url(
+        self._r: Any = Redis.from_url(
             url,
             socket_timeout=CachePolicy.SOCKET_TIMEOUT,
             socket_connect_timeout=CachePolicy.SOCKET_TIMEOUT,
         )
 
     async def get(self, key: str) -> bytes | None:
-        return await self._r.get(key)
+        value = await self._r.get(key)
+        return value if isinstance(value, bytes) else None
 
     async def set(self, key: str, value: bytes, ttl: int) -> None:
         await self._r.set(key, value, ex=ttl)

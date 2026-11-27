@@ -8,6 +8,7 @@ import socket
 import time
 import uuid
 from datetime import timedelta
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -19,6 +20,12 @@ from app.core.jobs import registry
 from app.core.jobs.store import JobStore
 from app.core.jobs.types import JobCancelled, JobContext, JobRecord, PermanentError
 from app.core.messages import Msg
+from app.core.metrics import (
+    job_duration_seconds,
+    jobs_oldest_queued_age_seconds,
+    jobs_processed_total,
+    jobs_queue_depth,
+)
 from app.shared.utils import json as jsonx
 from app.shared.utils.time import utcnow
 
@@ -27,7 +34,7 @@ log = logging.getLogger(__name__)
 
 def backoff_seconds(attempts: int) -> float:
     base = min(JobPolicy.BACKOFF_BASE * 2 ** max(attempts - 1, 0), JobPolicy.BACKOFF_MAX)
-    return base * random.uniform(0.8, 1.2)
+    return float(base * random.uniform(0.8, 1.2))
 
 
 def _bind_job_context(job: JobRecord) -> None:
@@ -50,7 +57,7 @@ async def _heartbeat(job_id: str, store: JobStore) -> None:
             log.warning("heartbeat failed for job %s", job_id, exc_info=True)
 
 
-async def _invoke(job: JobRecord, store: JobStore) -> dict | None:
+async def _invoke(job: JobRecord, store: JobStore) -> dict[str, Any] | None:
     handler = registry.get_handler(job.type)
     ctx = JobContext(job, store)
     await ctx.raise_if_cancelled()
@@ -82,11 +89,15 @@ async def execute(job: JobRecord, store: JobStore) -> None:
     """Run ONE claimed job to a terminal or retry state. Never raises (except task cancellation)."""
     _bind_job_context(job)
     beat = asyncio.create_task(_heartbeat(job.id, store))
+    started = time.perf_counter()
+    outcome = "failed"
     try:
         result = await _invoke(job, store)
         await store.succeed(job.id, result)
+        outcome = "succeeded"
     except JobCancelled:
         await store.cancelled(job.id)
+        outcome = "cancelled"
     except AppError as exc:  # includes PermanentError: business failure, no retry
         await _fail(job, store, exc.msg, retry=False)
     except ValidationError:  # bad payload: no retry
@@ -98,13 +109,15 @@ async def execute(job: JobRecord, store: JobStore) -> None:
         await _fail(job, store, Msg.INTERNAL_ERROR, retry=True)
     finally:
         beat.cancel()
+        jobs_processed_total.labels(type=job.type, outcome=outcome).inc()
+        job_duration_seconds.labels(type=job.type).observe(time.perf_counter() - started)
 
 
 class Worker:
     def __init__(self, store: JobStore, *, worker_id: str | None = None):
         self.store = store
         self.worker_id = worker_id or f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
-        self._running: set[asyncio.Task] = set()
+        self._running: set[asyncio.Task[None]] = set()
         self._last_reap = 0.0
         self._last_schedule = 0.0
 
@@ -135,6 +148,13 @@ class Worker:
 
     async def _maintenance(self) -> None:
         now = time.monotonic()
+        try:
+            stats = await self.store.queue_stats()
+            for status_name, count in stats.get("depth", {}).items():
+                jobs_queue_depth.labels(status=status_name).set(count)
+            jobs_oldest_queued_age_seconds.set(float(stats.get("oldest_queued_age", 0.0)))
+        except Exception:
+            log.exception("queue_stats failed")
         if now - self._last_reap > settings.job_stale_seconds / 2:
             self._last_reap = now
             try:
@@ -153,12 +173,12 @@ class Worker:
             if not handler.schedule_every:
                 continue
             dedupe = (
-                f"{JobPolicy.SYSTEM_SCOPE}:schedule:{handler.type.value}:"
+                f"{JobPolicy.SYSTEM_SCOPE}:schedule:{handler.job_type.value}:"
                 f"{bucket // handler.schedule_every}"
             )
             try:
                 await self.store.enqueue(
-                    type=handler.type.value,
+                    type=handler.job_type.value,
                     payload={},
                     user_id=None,
                     request_id=None,
@@ -168,4 +188,4 @@ class Worker:
                     priority=0,
                 )
             except Exception:
-                log.exception("schedule enqueue failed for %s", handler.type)
+                log.exception("schedule enqueue failed for %s", handler.job_type)

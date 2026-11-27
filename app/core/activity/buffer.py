@@ -7,10 +7,12 @@ slowing requests. A background task drains the queue and bulk-inserts batches.
 import asyncio
 import logging
 import time
+from typing import Any
 
 from app.core.activity.repository import activity_repo
 from app.core.config import settings
 from app.core.constants import Activity
+from app.core.metrics import activity_dropped_total
 from app.shared.helpers.http import client_ip
 
 log = logging.getLogger(__name__)
@@ -19,22 +21,23 @@ log = logging.getLogger(__name__)
 class ActivityBuffer:
     """Best-effort batched writer. record() never blocks and never raises."""
 
-    def __init__(self, sink=None):
+    def __init__(self, sink: Any = None) -> None:
         self._sink = sink or activity_repo
-        self._q: asyncio.Queue[dict] = asyncio.Queue(maxsize=settings.activity_queue_max)
-        self._task: asyncio.Task | None = None
+        self._q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=settings.activity_queue_max)
+        self._task: asyncio.Task[None] | None = None
         self._stopping = False
         self.dropped = 0
 
-    def record(self, entry: dict) -> None:
+    def record(self, entry: dict[str, Any]) -> None:
         if not settings.activity_enabled:
             return
         try:
             self._q.put_nowait(entry)
         except asyncio.QueueFull:
             self.dropped += 1  # shed load instead of slowing requests
+            activity_dropped_total.inc()
 
-    def record_request(self, request, ctx, status_code: int, started: float) -> None:
+    def record_request(self, request: Any, ctx: Any, status_code: int, started: float) -> None:
         """Build + record an entry. Skips Activity.SKIP_PATHS and f"{api_prefix}/health"."""
         path = request.url.path
         skip = set(Activity.SKIP_PATHS) | {f"{settings.api_prefix}/health"}
@@ -68,8 +71,8 @@ class ActivityBuffer:
             if batch:
                 await self._flush(batch)
 
-    async def _collect(self) -> list[dict]:
-        batch: list[dict] = []
+    async def _collect(self) -> list[dict[str, Any]]:
+        batch: list[dict[str, Any]] = []
         try:
             batch.append(await asyncio.wait_for(self._q.get(), settings.activity_flush_seconds))
         except TimeoutError:
@@ -78,11 +81,12 @@ class ActivityBuffer:
             batch.append(self._q.get_nowait())
         return batch
 
-    async def _flush(self, batch: list[dict]) -> None:
+    async def _flush(self, batch: list[dict[str, Any]]) -> None:
         try:
             await self._sink.append_many(batch)
         except Exception:
             self.dropped += len(batch)
+            activity_dropped_total.inc(len(batch))
             log.error("activity flush failed; dropped %d entries", len(batch), exc_info=True)
 
 

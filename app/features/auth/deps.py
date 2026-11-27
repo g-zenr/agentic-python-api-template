@@ -1,25 +1,24 @@
 """Auth dependencies: `CurrentUser`, `VerifiedUser`, and `require_permission` (RBAC)."""
 
-from typing import Annotated
+from collections.abc import Callable
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prisma.models import User
 
-from app.core import audit
+from app.core import audit, authz
 from app.core.constants import (
     AuditAction,
     AuditOutcome,
-    AuditReason,
     AuditResource,
     Permission,
 )
 from app.core.context import bind_user
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.messages import Msg
-from app.core.permissions import has_permission
 from app.core.security import decode_access_token
-from app.features.users import service as users_service
+from app.features.users.repository import users_repo
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -30,7 +29,9 @@ async def get_current_user(
     if creds is None:
         raise UnauthorizedError()
     sub, token_version = decode_access_token(creds.credentials)
-    user = await users_service.find(sub)
+    # H4: read the user UNCACHED on the auth path so is_active/role/email_verified_at/token_version
+    # changes take effect immediately (no ~60s stale-cache authorization window).
+    user = await users_repo.get(sub)
     if (
         user is None
         or not user.is_active
@@ -42,9 +43,13 @@ async def get_current_user(
     return user
 
 
-def require_permission(*perms: Permission):
-    async def checker(user: User = Depends(get_current_user), request: Request = None) -> User:
-        if not all(has_permission(user.role, p) for p in perms):
+def require_permission(*perms: Permission) -> Callable[..., Any]:
+    async def checker(
+        user: User = Depends(get_current_user),
+        request: Request = None,  # type: ignore[assignment]  # FastAPI special-cases exact Request
+    ) -> User:
+        decision = await authz.allowed(user, *perms)
+        if not decision.allowed:
             route = request.scope.get("route") if request else None
             path = route.path if route else (request.url.path if request else None)
             await audit.record(
@@ -53,7 +58,7 @@ def require_permission(*perms: Permission):
                 path,
                 outcome=AuditOutcome.DENIED,
                 metadata={
-                    "reason": AuditReason.INSUFFICIENT_PERMISSION,
+                    "reason": decision.reason.value if decision.reason else "unknown",
                     "required": [p.value for p in perms],
                 },
             )

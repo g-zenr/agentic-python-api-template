@@ -1,7 +1,6 @@
-"""HTTP helpers: client IP, ETag/if-match, polling headers, deprecation, and idempotency key."""
+"""HTTP helpers: client IP, ETag/if-match, polling headers, and idempotency key."""
 
 import hashlib
-from datetime import date
 from typing import Annotated
 
 from fastapi import Header, Request, Response
@@ -57,19 +56,6 @@ def set_poll_headers(response: Response, job_id: str) -> None:
     """Set `Location` to the job's poll URL and `Retry-After` for a 202 response."""
     response.headers[Hdr.LOCATION] = f"{settings.api_prefix}/jobs/{job_id}"
     set_retry_after(response)
-
-
-def deprecate(sunset: date, successor: str | None = None):
-    """Dependency that sets Deprecation/Sunset (and Link) headers on the response."""
-    from fastapi import Response as _Resp
-
-    async def dep(response: _Resp) -> None:
-        response.headers[Hdr.DEPRECATION] = "true"
-        response.headers[Hdr.SUNSET] = sunset.strftime("%a, %d %b %Y 00:00:00 GMT")
-        if successor:
-            response.headers[Hdr.LINK] = f'<{successor}>; rel="successor-version"'
-
-    return dep
 
 
 IdempotencyKey = Annotated[

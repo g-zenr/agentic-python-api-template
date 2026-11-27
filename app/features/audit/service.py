@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from prisma.models import User
+from prisma.models import ActivityLog, AuditLog, User
 
 from app.core.activity.repository import activity_repo
 from app.core.audit.repository import audit_repo
@@ -14,6 +14,7 @@ _AUDIT_ORDER = [{"occurred_at": "desc"}, {"id": "desc"}]
 
 
 def _audit_where(query: AuditQuery, *, actor_id: str | None = None) -> dict[str, Any]:
+    """`actor_id` (when given) is FORCED: an own-scope grant narrows results to the caller."""
     where: dict[str, Any] = {}
     if actor_id is not None:
         where["actor_id"] = actor_id
@@ -33,17 +34,26 @@ def _audit_where(query: AuditQuery, *, actor_id: str | None = None) -> dict[str,
     return where
 
 
-async def list_audit(params: CursorParams, query: AuditQuery):
-    return await audit_repo.paginate_cursor(params, where=_audit_where(query), order=_AUDIT_ORDER)
+async def list_audit(
+    params: CursorParams, query: AuditQuery, *, actor_id: str | None = None
+) -> tuple[list[AuditLog], str | None]:
+    return await audit_repo.paginate_cursor(
+        params, where=_audit_where(query, actor_id=actor_id), order=_AUDIT_ORDER
+    )
 
 
-async def list_my_audit(user: User, params: CursorParams):
+async def list_my_audit(user: User, params: CursorParams) -> tuple[list[AuditLog], str | None]:
     return await audit_repo.paginate_cursor(params, where={"actor_id": user.id}, order=_AUDIT_ORDER)
 
 
-async def list_activity(params: CursorParams, query: ActivityQuery):
+async def list_activity(
+    params: CursorParams, query: ActivityQuery, *, user_id: str | None = None
+) -> tuple[list[ActivityLog], str | None]:
+    """`user_id` (when given) is FORCED: an own-scope grant narrows results to the caller."""
     where: dict[str, Any] = {}
-    if query.user_id is not None:
+    if user_id is not None:
+        where["user_id"] = user_id
+    elif query.user_id is not None:
         where["user_id"] = query.user_id
     if query.status_code is not None:
         where["status_code"] = query.status_code

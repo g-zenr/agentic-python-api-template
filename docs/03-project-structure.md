@@ -27,8 +27,8 @@
 │   ├── core/                 # framework: config, constants, i18n, security, db, mcp,
 │   │                         #   cache/, jobs/, audit/, activity/
 │   ├── shared/               # reusable helpers + utils
-│   └── features/             # business features (health, auth, users, notes, jobs, audit, maintenance)
-└── tests/                    # DB-free test suite + fakes + docs/lifecycle guards
+│   └── features/             # business features (health, auth, users, notes, jobs, audit, maintenance, permissions)
+└── tests/                    # DB-free suite + fakes + docs/lifecycle guards + integration/
 ```
 
 ## Top-level folders
@@ -44,7 +44,8 @@
 - **`prisma/`** — the schema and generated migrations.
 - **`scripts/`** — `new_feature.py`, `remove_feature.py`, `check_feature.py`, and shared
   `_features.py` helpers.
-- **`tests/`** — the DB-free suite plus `fakes.py` and the docs/lifecycle guards.
+- **`tests/`** — the DB-free suite plus `fakes.py`, the docs/lifecycle guards, and
+  `integration/` (DB-backed tests behind the `integration` marker; see chapter 10).
 
 ## Anatomy of a feature folder
 | File | Purpose |

@@ -3,8 +3,8 @@
 from datetime import UTC, datetime
 
 from app.shared.utils.json import dumps, loads
-from app.shared.utils.text import slugify, truncate
-from app.shared.utils.time import iso, to_zone, utcnow
+from app.shared.utils.text import truncate
+from app.shared.utils.time import to_zone, utcnow
 
 
 def test_utcnow_is_tz_aware():
@@ -17,18 +17,9 @@ def test_to_zone_converts():
     assert zoned.utcoffset().total_seconds() == 8 * 3600
 
 
-def test_iso_roundtrips():
-    dt = datetime(2026, 1, 1, tzinfo=UTC)
-    assert iso(dt) == dt.isoformat()
-
-
 def test_truncate():
     assert truncate("hello", 10) == "hello"
     assert truncate("hello world", 8).endswith("…")
-
-
-def test_slugify():
-    assert slugify("Hello, World!") == "hello-world"
 
 
 def test_json_roundtrip():

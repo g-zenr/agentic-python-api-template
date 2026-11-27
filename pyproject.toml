@@ -1,6 +1,6 @@
 [project]
 name = "agentic-api"
-version = "0.3.0"
+version = "0.5.0"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi", "uvicorn[standard]", "pydantic>=2", "pydantic-settings", "email-validator",
@@ -16,7 +16,7 @@ observability = [
 
 [dependency-groups]
 dev = [
-  "pytest", "pytest-asyncio", "httpx", "ruff", "mypy",
+  "pytest", "pytest-asyncio", "httpx", "ruff", "mypy==1.17.1",
   "pytest-cov", "bandit", "pip-audit", "pre-commit", "asgi-lifespan",
 ]
 
@@ -34,8 +34,11 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "f
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-m 'not integration'"
-markers = ["integration: requires a real database/redis (TEST_DATABASE_URL / TEST_REDIS_URL)"]
+addopts = "-m 'not integration and not speed'"
+markers = [
+  "integration: requires a real database/redis (TEST_DATABASE_URL / TEST_REDIS_URL)",
+  "speed: per-request latency SLO (API_SLO_MS, default 1000ms; 2000 deployed)",
+]
 
 [tool.mypy]
 python_version = "3.12"
@@ -43,5 +46,8 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["prisma.*", "mcp.*", "redis.*"]
+module = [
+  "prisma", "prisma.*", "mcp", "mcp.*", "redis", "redis.*", "sentry_sdk", "sentry_sdk.*",
+  "opentelemetry", "opentelemetry.*", "aiosmtplib",
+]
 ignore_missing_imports = true

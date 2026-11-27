@@ -1,6 +1,7 @@
 """User service: profile access, administration, and account deletion/export (audited)."""
 
 import secrets
+from typing import cast
 
 from prisma.models import User
 
@@ -8,7 +9,7 @@ from app.core import audit
 from app.core.cache import cached
 from app.core.config import settings
 from app.core.constants import AuditAction, AuditResource, CacheNS, CacheTTL, JobType, Limits
-from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.exceptions import BadInputError, ConflictError, NotFoundError, UnauthorizedError
 from app.core.jobs import enqueue
 from app.core.messages import Msg
 from app.core.security import hash_password, verify_password
@@ -28,7 +29,7 @@ async def find(user_id: str) -> User | None:
 
 
 async def get(user_id: str) -> User:
-    user = await find(user_id)
+    user = cast("User | None", await find(user_id))
     if user is None:
         raise NotFoundError(Msg.USER_NOT_FOUND)
     return user
@@ -100,24 +101,31 @@ async def create_admin(email: str, password: str, promote: bool) -> None:
 
     email = email.lower()
     if not (Limits.PASSWORD_MIN <= len(password) <= Limits.PASSWORD_MAX):
-        raise ValueError("password length out of range")
-    request_ctx.set(RequestContext(actor_type=ActorType.SYSTEM))
-    async with transaction():
-        existing = await users_repo.find_by_email(email)
-        if existing is not None:
-            if not promote:
-                raise ValueError("user exists; pass --promote to promote")
-            await users_repo.update(existing.id, {"role": Role.ADMIN.value})
-            user_id = existing.id
-        else:
-            user = await users_repo.create(
-                data={
-                    "email": email,
-                    "password_hash": hash_password(password),
-                    "name": "Admin",
-                    "role": Role.ADMIN.value,
-                    "email_verified_at": utcnow(),
-                }
-            )
-            user_id = user.id
-        await audit.record(AuditAction.ADMIN_BOOTSTRAP, AuditResource.USER, user_id)
+        raise BadInputError(Msg.VALIDATION_ERROR)
+    ctx_token = request_ctx.set(RequestContext(actor_type=ActorType.SYSTEM))
+    try:
+        async with transaction():
+            existing = await users_repo.find_by_email(email)
+            if existing is not None:
+                if not promote:
+                    raise ConflictError(Msg.USER_EMAIL_TAKEN)
+                await users_repo.update(existing.id, {"role": Role.ADMIN.value})
+                user_id = existing.id
+            else:
+                user = await users_repo.create(
+                    data={
+                        "email": email,
+                        "password_hash": hash_password(password),
+                        "name": "Admin",
+                        "role": Role.ADMIN.value,
+                        "email_verified_at": utcnow(),
+                    }
+                )
+                user_id = user.id
+            await audit.record(AuditAction.ADMIN_BOOTSTRAP, AuditResource.USER, user_id)
+        if existing is not None:  # role changed -> the user's cached grants/baseline is stale
+            from app.core.authz import _load_grants
+
+            await after_commit(lambda: _load_grants.invalidate(existing.id))
+    finally:
+        request_ctx.reset(ctx_token)

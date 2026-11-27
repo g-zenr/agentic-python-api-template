@@ -15,6 +15,11 @@ enum Role {
   ADMIN
 }
 
+enum GrantEffect {
+  ALLOW
+  DENY
+}
+
 model User {
   id               String    @id @default(uuid())
   email            String    @unique
@@ -28,12 +33,31 @@ model User {
   deleted_at       DateTime?
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
-  notes            Note[]
-  jobs             Job[]
-  refresh_tokens   RefreshToken[]
-  one_time_tokens  OneTimeToken[]
+  notes            Note[] 
+  jobs             Job[] 
+  refresh_tokens   RefreshToken[] 
+  one_time_tokens  OneTimeToken[] 
+  grants           PermissionGrant[] 
+ 
+  @@map("users") 
+} 
 
-  @@map("users")
+model PermissionGrant {
+  id         String      @id @default(uuid())
+  user_id    String
+  resource   String
+  action     String
+  effect     GrantEffect
+  conditions Json?
+  granted_by String?
+  expires_at DateTime?
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+  user       User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, resource, action])
+  @@index([user_id])
+  @@map("permission_grants")
 }
 
 model Note {

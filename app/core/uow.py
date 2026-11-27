@@ -1,7 +1,7 @@
 """Unit of work: one DB transaction per mutation. Repositories join it automatically."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from datetime import timedelta
@@ -26,7 +26,7 @@ def in_transaction() -> bool:
 
 
 @asynccontextmanager
-async def transaction():
+async def transaction() -> AsyncIterator[None]:
     if in_transaction():  # nested: join the outer transaction
         yield
         return

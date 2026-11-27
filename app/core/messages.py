@@ -41,6 +41,8 @@ class Msg(StrEnum):
     USER_EMAIL_TAKEN = "user.email_taken"
     USER_UPDATED = "user.updated"
     USER_DELETED = "user.deleted"
+    PERMISSION_NOT_FOUND = "permission.not_found"
+    PERMISSIONS_UPDATED = "permission.updated"
     NOTE_NOT_FOUND = "note.not_found"
     NOTE_CREATED = "note.created"
     NOTE_UPDATED = "note.updated"

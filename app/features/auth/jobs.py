@@ -1,6 +1,7 @@
 """Auth job handlers: deliver verification/reset emails (the raw token never sits in the jobs table)."""  # noqa: E501
 
 from datetime import timedelta
+from typing import Any
 
 from app.core.config import settings
 from app.core.constants import JobType, TokenPurpose
@@ -16,7 +17,9 @@ from app.shared.utils.time import utcnow
 
 
 @job_handler(JobType.AUTH_SEND_TOKEN_EMAIL, payload=SendTokenEmailPayload)
-async def send_token_email(ctx: JobContext, payload: SendTokenEmailPayload) -> dict | None:
+async def send_token_email(
+    ctx: JobContext, payload: SendTokenEmailPayload
+) -> dict[str, Any] | None:
     """Create a one-time token and email the localized link. Idempotent: a duplicate replaces the token."""  # noqa: E501
     user = await users_repo.get(payload.user_id)
     if user is None or not user.is_active or user.deleted_at is not None:

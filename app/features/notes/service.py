@@ -4,6 +4,8 @@ Every id-scoped operation goes through `_owned` (missing and foreign notes raise
 Mutations run in a transaction with the audit write; cache invalidation runs after commit.
 """
 
+from typing import Any, cast
+
 from prisma.models import Note, User
 
 from app.core import audit
@@ -55,7 +57,7 @@ async def list_notes(
     user: User, params: PageParams, sort: str | None = None, q: str | None = None
 ) -> tuple[list[Note], int]:
     """List the user's notes (cached per user + page + sort + q). `q` filters titles."""
-    where: dict = {"user_id": user.id}
+    where: dict[str, Any] = {"user_id": user.id}
     if q:
         where["title"] = {"contains": q, "mode": "insensitive"}
     order = parse_sort(sort, {"created_at", "updated_at", "title"})
@@ -76,7 +78,7 @@ async def update(user: User, note_id: str, payload: NoteUpdate, expected_version
         )
         if not ok:
             raise PreconditionFailedError(Msg.PRECONDITION_FAILED)
-        updated = await notes_repo.get(note_id)
+        updated = cast("Note", await notes_repo.get(note_id))
         await audit.record(
             AuditAction.NOTE_UPDATE,
             AuditResource.NOTE,

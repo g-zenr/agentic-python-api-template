@@ -35,7 +35,10 @@ Then open http://localhost:8000/docs.
 | POST | /api/v1/notes/export | Bearer | Export notes (202). |
 | GET/PATCH/DELETE | /api/v1/notes/{id} | Bearer | Get/update (If-Match)/delete. |
 | GET | /api/v1/jobs · /jobs/{id} · POST /jobs/{id}/cancel | Bearer | Poll/cancel jobs. |
-| GET | /api/v1/audit · /audit/me · /audit/activity | audit/activity:read | Logs (cursor). |
+| GET | /api/v1/audit · /audit/me · /audit/activity | audit/activity:read | Logs (cursor). `own_only` grants narrow to your own rows. |
+| GET | /api/v1/permissions/catalog | permissions:manage | Assignable page × action matrix (ABAC, ADR-0019). |
+| GET/PUT | /api/v1/permissions/users/{id} | permissions:manage | Effective grants / replace grant set (If-Match + Idempotency-Key). |
+| DELETE | /api/v1/permissions/users/{id}/{grant_id} | permissions:manage | Revoke one grant. |
 | GET | /metrics | metrics token | Prometheus metrics. |
 
 MCP (optional) is served at `/mcp` with per-client scoped keys (`MCP_CLIENTS`).
@@ -54,10 +57,11 @@ If Docker or Postgres is unavailable, skip `docker compose` and `make migrate`; 
 not need a database.
 
 > **Note on locked-down Windows hosts:** an OS Application Control / Device Guard policy can block
-> the Prisma schema engine (`schema-engine-windows.exe`), `mypy`'s compiled DLL, and some
+> the Prisma schema engine (`schema-engine-windows.exe`) and some
 > `.venv/Scripts/*.exe` shims. When that happens: run the API with
-> `uv run python -m uvicorn app.main:app`; the `production_hardening` migration SQL is committed under
-> `prisma/migrations/` (written via the `prisma migrate diff --script` fallback) so `prisma migrate
-> deploy` works on a normal host; and run type checks in CI. The end-to-end flow (register → login →
+> `uv run python -m uvicorn app.main:app`; the migration SQL is committed under
+> `prisma/migrations/` so `prisma migrate deploy` works on a normal host (or apply the SQL via
+> `psql` inside the `db` container). Dev `mypy` is pinned to 1.17.1, whose compiled wheel is NOT
+> blocked, so `make typecheck` runs locally. The end-to-end flow (register → login →
 > refresh → notes CRUD → export job → audit → `/health/ready` → `/metrics`) was verified against a
 > PostgreSQL container with equivalent SQL.

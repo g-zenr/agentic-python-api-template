@@ -9,15 +9,26 @@ import functools
 import logging
 import random
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Protocol, cast
 
 from pydantic import TypeAdapter, ValidationError
 
 from app.core.cache.backends import CacheBackend, build_backend
 from app.core.config import settings
 from app.core.constants import CacheNS, CacheTTL
+from app.core.metrics import cache_operations_total
 
 log = logging.getLogger(__name__)
+
+
+class CachedFn(Protocol):
+    """A `@cached`-decorated function: callable, plus explicit invalidation hooks."""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]: ...
+
+    async def invalidate(self, *args: Any, **kwargs: Any) -> None: ...
+
+    async def invalidate_scope(self, value: object) -> None: ...
 
 
 class Cache:
@@ -68,7 +79,7 @@ class Cache:
         *,
         cache_none: bool = False,
     ) -> Any:
-        adapter = TypeAdapter(type_)
+        adapter: TypeAdapter[Any] = TypeAdapter(type_)
         hit, value = await self._read(key, adapter)
         if hit:
             return value
@@ -90,16 +101,19 @@ class Cache:
             if not lock.locked():
                 self._locks.pop(key, None)
 
-    async def _read(self, key: str, adapter: TypeAdapter) -> tuple[bool, Any]:
+    async def _read(self, key: str, adapter: TypeAdapter[Any]) -> tuple[bool, Any]:
         raw = await self._safe(self.backend.get(key))
         if raw is None:
+            cache_operations_total.labels(result="miss").inc()
             return False, None
         try:
             value = adapter.validate_json(raw)
         except ValidationError:  # schema changed since it was cached
             await self.delete(key)
+            cache_operations_total.labels(result="miss").inc()
             return False, None
         self.stats["hits"] += 1
+        cache_operations_total.labels(result="hit").inc()
         return True, value
 
     async def _safe(self, awaitable: Awaitable[Any]) -> Any:
@@ -107,6 +121,7 @@ class Cache:
             return await awaitable
         except Exception:
             self.stats["errors"] += 1
+            cache_operations_total.labels(result="error").inc()
             log.warning("cache backend error (treated as miss)", exc_info=True)
             return None
 
@@ -130,15 +145,15 @@ def cached(
     type_: Any = Any,
     scope: Callable[..., object] | None = None,
     cache_none: bool = False,
-):
+) -> Callable[[Callable[..., Awaitable[Any]]], CachedFn]:
     """Cache an async function. `key`/`scope` receive the function's own arguments.
 
     The wrapped function gains `.invalidate(*args)` (exact entry) and `.invalidate_scope(value)`.
     Only values a pydantic TypeAdapter(type_) can round-trip may be returned.
     """
 
-    def wrap(fn):
-        async def build_key(*a, **kw) -> str:
+    def wrap(fn: Callable[..., Awaitable[Any]]) -> CachedFn:
+        async def build_key(*a: Any, **kw: Any) -> str:
             parts = key(*a, **kw)
             parts = parts if isinstance(parts, tuple) else (parts,)
             if scope is None:
@@ -146,7 +161,7 @@ def cached(
             return await cache.scoped_key(ns, scope(*a, **kw), *parts)
 
         @functools.wraps(fn)
-        async def inner(*a, **kw):
+        async def inner(*a: Any, **kw: Any) -> Any:
             return await cache.get_or_set(
                 await build_key(*a, **kw),
                 lambda: fn(*a, **kw),
@@ -155,13 +170,14 @@ def cached(
                 cache_none=cache_none,
             )
 
-        async def invalidate(*a, **kw) -> None:
+        async def invalidate(*a: Any, **kw: Any) -> None:
             await cache.delete(await build_key(*a, **kw))
 
         async def invalidate_scope(scope_value: object) -> None:
             await cache.invalidate_scope(ns, scope_value)
 
-        inner.invalidate, inner.invalidate_scope = invalidate, invalidate_scope  # type: ignore[attr-defined]
-        return inner
+        inner.invalidate = invalidate  # type: ignore[attr-defined]
+        inner.invalidate_scope = invalidate_scope  # type: ignore[attr-defined]
+        return cast(CachedFn, inner)
 
     return wrap

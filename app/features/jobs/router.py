@@ -1,5 +1,7 @@
 """Jobs feature: a thin HTTP surface over the core job engine (poll/cancel; submit is elsewhere)."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.core.constants import TERMINAL_JOB_STATUSES, CacheControl, Header, JobStatus, Tag
@@ -24,7 +26,7 @@ async def list_jobs(
     user: CurrentUser,
     params: PageParams = Depends(),
     status: JobStatus | None = Query(default=None),
-) -> ApiResponse:
+) -> ApiResponse[Any]:
     items, total = await service.list_jobs(user, params, status)
     data = [service.to_out(i) for i in items]
     return page_of(data, total, params)
@@ -37,7 +39,9 @@ async def list_jobs(
     description="Poll until `status` is SUCCEEDED, FAILED or CANCELLED. Honor `Retry-After`. "
     "Send `If-None-Match` with the last `ETag`; 304 means nothing changed.",
 )
-async def get_job(job_id: str, request: Request, response: Response, user: CurrentUser):
+async def get_job(
+    job_id: str, request: Request, response: Response, user: CurrentUser
+) -> ApiResponse[Any] | Response:
     job = await service.get(user, job_id)
     etag = etag_for(job.id, job.status, job.progress, job.updated_at)
     headers = {Header.ETAG: etag, Header.CACHE_CONTROL: CacheControl.REVALIDATE}
@@ -56,6 +60,6 @@ async def get_job(job_id: str, request: Request, response: Response, user: Curre
     description="Cancel a QUEUED job, or request cancellation of a RUNNING job. "
     "Terminal jobs cannot be cancelled.",
 )
-async def cancel_job(job_id: str, user: CurrentUser) -> ApiResponse:
+async def cancel_job(job_id: str, user: CurrentUser) -> ApiResponse[Any]:
     job, msg = await service.cancel(user, job_id)
     return ok(job, msg)

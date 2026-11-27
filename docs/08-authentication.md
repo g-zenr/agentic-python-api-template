@@ -5,7 +5,7 @@
 ## What you will learn
 - The register/login flow.
 - What is inside an access token.
-- How `CurrentUser` / `AdminUser` protect routes.
+- How `CurrentUser` / `VerifiedUser` / `require_permission` protect routes.
 - The security decisions behind the design.
 
 ## Register / login flow
@@ -43,19 +43,21 @@ exists.
 Import the dependency from `app.features.auth.deps`:
 
 ```python
-from app.features.auth.deps import CurrentUser, AdminUser
+from app.core.constants import Permission
+from app.features.auth.deps import CurrentUser, require_permission
 
 
 @router.get("/me")
 async def read_me(user: CurrentUser) -> ApiResponse: ...
 
 
-@router.get("")
-async def list_users(_: AdminUser, params: PageParams = Depends()) -> ApiResponse: ...
+@router.get("", dependencies=[Depends(require_permission(Permission.USERS_READ))])
+async def list_users(params: PageParams = Depends()) -> ApiResponse: ...
 ```
 
 - `CurrentUser` — requires a valid token for an active user.
-- `AdminUser` — additionally requires `Role.ADMIN` (else `403 Forbidden`).
+- No `AdminUser` class; use `require_permission(Permission.X, ...)` which returns `403 Forbidden`
+  when the role lacks the permission (and records `access.denied`).
 
 ## Security decisions
 - **Passwords**: argon2 via `pwdlib` (`PasswordHash.recommended()`).

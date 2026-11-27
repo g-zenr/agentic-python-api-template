@@ -18,6 +18,10 @@ _VALID = dict(
     app_base_url="https://example.com",
     mcp_clients=[McpClientConfig(name="c", key_sha256="h")],
     metrics_token="tok",
+    audit_fail_closed=True,
+    authz_fail_closed=True,
+    require_email_verification=True,
+    email_from="no-reply@example.org",
 )
 
 
@@ -43,6 +47,10 @@ def test_dev_is_never_blocked():
         {"app_base_url": "http://x"},
         {"mcp_clients": []},
         {"metrics_token": None},
+        {"audit_fail_closed": False},
+        {"authz_fail_closed": False},
+        {"require_email_verification": False},
+        {"email_from": "no-reply@example.com"},
     ],
 )
 def test_each_unsafe_setting_reported(override):

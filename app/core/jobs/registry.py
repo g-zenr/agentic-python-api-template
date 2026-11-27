@@ -5,6 +5,7 @@ Handlers MUST be idempotent (delivery is at-least-once) and return a SMALL JSON-
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -15,8 +16,8 @@ from app.core.messages import Msg
 
 @dataclass(frozen=True)
 class Handler:
-    type: JobType
-    fn: Callable[..., Awaitable[dict | None]]
+    job_type: JobType
+    fn: Callable[..., Awaitable[dict[str, Any] | None]]
     payload_model: type[BaseModel] | None
     timeout: int
     max_attempts: int
@@ -33,14 +34,19 @@ def job_handler(
     timeout: int = JobPolicy.DEFAULT_TIMEOUT,
     max_attempts: int = JobPolicy.DEFAULT_MAX_ATTEMPTS,
     schedule_every: int | None = None,
-):
+) -> Callable[
+    [Callable[..., Awaitable[dict[str, Any] | None]]],
+    Callable[..., Awaitable[dict[str, Any] | None]],
+]:
     """Register an async handler: `fn(ctx)`, or `fn(ctx, payload)` when `payload` is set."""
 
-    def wrap(fn: Callable[..., Awaitable[dict | None]]) -> Callable[..., Awaitable[dict | None]]:
+    def wrap(
+        fn: Callable[..., Awaitable[dict[str, Any] | None]],
+    ) -> Callable[..., Awaitable[dict[str, Any] | None]]:
         if type_ in _handlers:
             raise RuntimeError(f"job handler already registered: {type_}")
         _handlers[type_] = Handler(
-            type=type_,
+            job_type=type_,
             fn=fn,
             payload_model=payload,
             timeout=timeout,

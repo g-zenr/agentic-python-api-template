@@ -17,7 +17,7 @@ Use this to add a single route to an **existing** feature. (A whole new concept 
    `AppError` subclass with a `Msg` key on failure.
 4. **Router.** Add the route to `router.py` with `response_model=ApiResponse[...]`, `summary`,
    `description`, and the correct `status_code`. Return `ok(...)` or `page_of(...)`. Add auth via
-   `CurrentUser`/`AdminUser` if needed.
+   `CurrentUser`/`VerifiedUser` + `require_permission(...)` if needed.
 5. **Docs.** Update the README Endpoints table and add a Change history row; update "Last changed"
    in `docs/features.md`; add a CHANGELOG entry; bump the version (minor for a new endpoint).
 6. **Tests + verify.** Add/adjust `tests/features/test_<x>.py`; run

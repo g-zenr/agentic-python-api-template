@@ -7,41 +7,38 @@ from enum import StrEnum
 
 
 class Defaults:
-    JWT_SECRET = "dev-secret"
+    JWT_SECRET: str = "dev-secret"
 
 
 class Header:
-    LOCALE = "accept-language"
-    REQUEST_ID = "x-request-id"
-    CACHE_CONTROL = "cache-control"
-    ETAG = "etag"
-    IF_NONE_MATCH = "if-none-match"
-    IF_MATCH = "if-match"
-    RETRY_AFTER = "retry-after"
-    LOCATION = "location"
-    USER_AGENT = "user-agent"
-    FORWARDED_FOR = "x-forwarded-for"
-    IDEMPOTENCY_KEY = "idempotency-key"
-    IDEMPOTENCY_REPLAY = "idempotent-replay"
-    DEPRECATION = "deprecation"
-    SUNSET = "sunset"
-    LINK = "link"
-    STS = "strict-transport-security"
-    CONTENT_TYPE_OPTIONS = "x-content-type-options"
-    FRAME_OPTIONS = "x-frame-options"
-    REFERRER_POLICY = "referrer-policy"
-    CSP = "content-security-policy"
+    LOCALE: str = "accept-language"
+    REQUEST_ID: str = "x-request-id"
+    CACHE_CONTROL: str = "cache-control"
+    ETAG: str = "etag"
+    IF_NONE_MATCH: str = "if-none-match"
+    IF_MATCH: str = "if-match"
+    RETRY_AFTER: str = "retry-after"
+    LOCATION: str = "location"
+    USER_AGENT: str = "user-agent"
+    FORWARDED_FOR: str = "x-forwarded-for"
+    IDEMPOTENCY_KEY: str = "idempotency-key"
+    IDEMPOTENCY_REPLAY: str = "idempotent-replay"
+    STS: str = "strict-transport-security"
+    CONTENT_TYPE_OPTIONS: str = "x-content-type-options"
+    FRAME_OPTIONS: str = "x-frame-options"
+    REFERRER_POLICY: str = "referrer-policy"
+    CSP: str = "content-security-policy"
 
 
 class Pagination:
-    DEFAULT_PAGE = 1
-    DEFAULT_SIZE = 20
-    MAX_SIZE = 100
+    DEFAULT_PAGE: int = 1
+    DEFAULT_SIZE: int = 20
+    MAX_SIZE: int = 100
 
 
 class CacheControl:
-    NO_STORE = "no-store"
-    REVALIDATE = "private, no-cache"
+    NO_STORE: str = "no-store"
+    REVALIDATE: str = "private, no-cache"
 
 
 class Role(StrEnum):
@@ -55,6 +52,7 @@ class Permission(StrEnum):
     ACTIVITY_READ = "activity:read"
     JOBS_READ_ALL = "jobs:read_all"
     JOBS_MANAGE_ALL = "jobs:manage_all"
+    PERMISSIONS_MANAGE = "permissions:manage"
 
 
 class TokenPurpose(StrEnum):
@@ -77,15 +75,15 @@ class ErrorCode(StrEnum):
 
 
 class Limits:
-    PASSWORD_MIN = 8
-    PASSWORD_MAX = 128
-    NAME_MAX = 100
-    TITLE_MAX = 120
-    BODY_MAX = 20_000
-    IDEMPOTENCY_KEY_MAX = 100
-    USER_AGENT_MAX = 300
-    SORT_MAX_FIELDS = 3
-    SEARCH_MAX = 100
+    PASSWORD_MIN: int = 8
+    PASSWORD_MAX: int = 128
+    NAME_MAX: int = 100
+    TITLE_MAX: int = 120
+    BODY_MAX: int = 20_000
+    IDEMPOTENCY_KEY_MAX: int = 100
+    USER_AGENT_MAX: int = 300
+    SORT_MAX_FIELDS: int = 3
+    SEARCH_MAX: int = 100
 
 
 class Tag:
@@ -95,24 +93,26 @@ class Tag:
     NOTES = "Notes"
     JOBS = "Jobs"
     AUDIT = "Audit"
+    PERMISSIONS = "Permissions"
 
 
 class CacheNS(StrEnum):
     USER = "user"
     NOTES = "notes"
     RATE = "rate"
+    PERMISSIONS = "permissions"
 
 
 class CacheTTL:
-    SHORT = 60
-    MEDIUM = 300
-    LONG = 3600
-    NEGATIVE = 15
-    JITTER = 0.1
+    SHORT: int = 60
+    MEDIUM: int = 300
+    LONG: int = 3600
+    NEGATIVE: int = 15
+    JITTER: float = 0.1
 
 
 class CachePolicy:
-    SOCKET_TIMEOUT = 1.0
+    SOCKET_TIMEOUT: float = 1.0
 
 
 class ActorType(StrEnum):
@@ -134,12 +134,15 @@ class AuditResource(StrEnum):
     ENDPOINT = "endpoint"
     LOG = "log"
     TOKEN = "token"
+    PERMISSION = "permission"
 
 
 class AuditReason(StrEnum):
     UNKNOWN_EMAIL = "unknown_email"
     BAD_PASSWORD = "bad_password"
     INSUFFICIENT_PERMISSION = "insufficient_permission"
+    PERMISSION_DENIED = "permission_denied"
+    POLICY_ERROR = "policy_error"
 
 
 class AuditAction(StrEnum):
@@ -166,6 +169,7 @@ class AuditAction(StrEnum):
     RETENTION_PURGE = "retention.purge"
     ACCOUNT_ERASE = "account.erase"
     ADMIN_BOOTSTRAP = "admin.bootstrap"
+    PERMISSION_GRANTS_UPDATED = "permission.grants_updated"
 
 
 class JobStatus(StrEnum):
@@ -190,31 +194,38 @@ class JobType(StrEnum):
 
 
 class JobPolicy:
-    DEFAULT_TIMEOUT = 300
-    DEFAULT_MAX_ATTEMPTS = 3
-    BACKOFF_BASE = 5
-    BACKOFF_MAX = 600
-    RESULT_MAX_BYTES = 512_000
-    HEARTBEAT_SECONDS = 20
-    SHUTDOWN_GRACE = 30
-    SCHEDULE_CHECK_SECONDS = 30
-    SYSTEM_SCOPE = "system"
+    DEFAULT_TIMEOUT: int = 300
+    DEFAULT_MAX_ATTEMPTS: int = 3
+    BACKOFF_BASE: int = 5
+    BACKOFF_MAX: int = 600
+    RESULT_MAX_BYTES: int = 512_000
+    HEARTBEAT_SECONDS: int = 20
+    SHUTDOWN_GRACE: int = 30
+    SCHEDULE_CHECK_SECONDS: int = 30
+    SYSTEM_SCOPE: str = "system"
 
 
 class Schedule:
-    HOURLY = 3600
-    DAILY = 86400
+    HOURLY: int = 3600
+    DAILY: int = 86400
 
 
 class Activity:
-    SKIP_PATHS = ("/docs", "/openapi.json", "/mcp", "/metrics")  # plus f"{api_prefix}/health"
-    UNMATCHED = "<unmatched>"
+    SKIP_PATHS: tuple[str, ...] = (
+        "/docs",
+        "/openapi.json",
+        "/mcp",
+        "/metrics",
+    )  # plus f"{api_prefix}/health"
+    UNMATCHED: str = "<unmatched>"
 
 
 class Redaction:
-    FIELDS = frozenset({"password", "password_hash", "token", "access_token", "secret"})
-    IGNORED = frozenset({"updated_at"})
-    MASK = "***"
+    FIELDS: frozenset[str] = frozenset(
+        {"password", "password_hash", "token", "access_token", "secret"}
+    )
+    IGNORED: frozenset[str] = frozenset({"updated_at"})
+    MASK: str = "***"
 
 
 class RateBucket(StrEnum):
@@ -226,6 +237,7 @@ class RateBucket(StrEnum):
     FORGOT_IP = "forgot_ip"
     FORGOT_ACCOUNT = "forgot_account"
     RESEND_USER = "resend_user"
+    PERMISSIONS_IP = "permissions_ip"
 
 
 # (limit, window seconds); GLOBAL_IP limit comes from settings.
@@ -237,4 +249,16 @@ RATE_POLICY: dict[RateBucket, tuple[int, int]] = {
     RateBucket.FORGOT_IP: (5, 3600),
     RateBucket.FORGOT_ACCOUNT: (3, 3600),
     RateBucket.RESEND_USER: (3, 3600),
+    RateBucket.PERMISSIONS_IP: (20, 60),
 }
+
+
+class GrantEffect(StrEnum):
+    ALLOW = "ALLOW"
+    DENY = "DENY"
+
+
+class GrantCondition:
+    """Typed vocabulary for `permission_grants.conditions`; new keys need an ADR."""
+
+    OWN_ONLY: str = "own_only"

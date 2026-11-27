@@ -2,6 +2,7 @@
 
 import hashlib
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import Request
 
@@ -9,10 +10,7 @@ from app.core.cache import cache
 from app.core.config import settings
 from app.core.constants import RATE_POLICY, RateBucket
 from app.core.exceptions import RateLimitedError
-
-
-def _key(bucket: RateBucket, identity: str) -> str:
-    return f"{bucket.value}:{identity}"
+from app.core.metrics import rate_limit_rejections_total
 
 
 async def enforce(
@@ -32,6 +30,7 @@ async def enforce(
         bucket.value, identity, limit or default_limit, window or default_window
     )
     if retry:
+        rate_limit_rejections_total.labels(bucket=bucket.value).inc()
         raise RateLimitedError(retry)
 
 
@@ -44,7 +43,7 @@ async def reset(bucket: RateBucket, identity: str) -> None:
     await cache.rate_reset(bucket.value, identity)
 
 
-def by_ip(bucket: RateBucket) -> Callable:
+def by_ip(bucket: RateBucket) -> Callable[..., Any]:
     """FastAPI dependency factory: rate-limit by client IP."""
 
     async def dep(request: Request) -> None:

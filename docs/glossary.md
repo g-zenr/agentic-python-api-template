@@ -26,7 +26,7 @@
 | **Worker** | The process (`python -m app.worker`) that claims and runs jobs. |
 | **Polling** | The client pattern of repeatedly calling `GET /jobs/{id}` until terminal. |
 | **Idempotency key** | A client-supplied key that makes a repeated `POST` return the same job. |
-| **At-least-once** | Delivery guarantee meaning a job may run more than once ⇒ handlers must be idempotent. |
+| **At-least-once** | Delivery guarantee meaning a job may run more than once: handlers must be idempotent. |
 | **Audit entry** | A durable "who changed what" record in `audit_logs` (append-only). |
 | **Activity entry** | A high-volume per-request record in `activity_logs` (best-effort). |
 | **Actor** | Who performed an action: a user, the system, or anonymous. |
@@ -36,4 +36,11 @@
 | **Cache namespace** | A `CacheNS` grouping cached entries (e.g. `user`, `notes`). |
 | **Scope** | A per-user (or per-entity) cache sub-keyspace invalidated in O(1) via a version counter. |
 | **Single-flight** | De-duplicating concurrent cache misses so the factory runs once per key. |
-| **TTL jitter** | ±10% randomization of cache expiry to avoid synchronized expiry. |
+| **TTL jitter** | A +/-10% randomization of cache expiry to avoid synchronized expiry. |
+| **RBAC** | Role-Based Access Control: the static role-to-permission matrix that bootstraps decisions. |
+| **ABAC** | Attribute-Based Access Control: decisions from subject/resource/action/environment attributes (ADR-0019). |
+| **PDP** | Policy Decision Point: `app/core/authz.py`, where allow/deny is decided. |
+| **PEP** | Policy Enforcement Point: where decisions are enforced (`require_permission`, service checks). |
+| **Permission grant** | A `permission_grants` row: per-user page (resource) x action x effect (ALLOW/DENY) with optional conditions. |
+| **Effective permissions** | Role baseline UNION ALLOW grants MINUS DENY grants for a user (deny always wins). |
+| **own_only** | A grant condition meaning the permission applies only to resources the subject owns. |

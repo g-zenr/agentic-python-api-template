@@ -15,7 +15,7 @@ owns the persisted user record and its repository.
 |---|---|---|---|
 | GET | /api/v1/users/me | CurrentUser | Return the caller's own profile. |
 | PATCH | /api/v1/users/me | CurrentUser | Update the caller's name and/or locale. |
-| GET | /api/v1/users | AdminUser | Paginated list of all users (admin only). |
+| GET | /api/v1/users | AdminUser (`users:read`) | Paginated list of all users (admin only). |
 
 ## Data model
 `User` (`@@map("users")`): `id`, `email` (unique), `password_hash`, `name`, `role`
@@ -26,7 +26,7 @@ owns the persisted user record and its repository.
 - `UserUpdate.locale` must be one of `settings.supported_locales`.
 - Unknown id → `404` with `Msg.USER_NOT_FOUND`.
 - Successful update → `Msg.USER_UPDATED`.
-- The listing route requires `Role.ADMIN` (`AdminUser`).
+- The listing route requires `Permission.USERS_READ` (`require_permission`; admin role has it).
 - **Audit events**: `user.update` (resource `user`, before/after `UserOut` snapshots) on every
   successful `PATCH /users/me`.
 - **Cache**: `find(user_id)` is cached under `user:<id>` for `CacheTTL.SHORT`. EVERY code path
@@ -34,7 +34,7 @@ owns the persisted user record and its repository.
 - **Jobs**: none submitted here.
 
 ## Dependencies
-- `app/features/auth/deps.py` (`CurrentUser`, `AdminUser`).
+- `app/features/auth/deps.py` (`CurrentUser`, `require_permission`).
 - `app/core/cache/` (`@cached`), `app/core/audit/` (`record`).
 - `app/core/constants.py` (`Role`, `Limits`, `Tag.USERS`, `CacheNS`, `AuditAction`),
   `app/core/messages.py` (`Msg.USER_*`).
@@ -51,3 +51,5 @@ owns the persisted user record and its repository.
 | 0.1.0 | 2026-11-26 | Added | Initial version: profile read/update and admin listing |
 | 0.2.0 | 2026-11-26 | Changed | Cached `find` (user scope) + `user.update` audit event |
 | 0.3.0 | 2026-11-26 | Added | Account delete/export (202), transactional mutations, permission-gated list |
+| 0.4.0 | 2026-11-26 | Changed | PII-scrub raw SQL moved to repositories; create_admin typed errors + ctx reset; permission docs |
+| 0.4.2 | 2026-11-27 | Fixed | account_erase returns deleted:<actual> (scrub always runs; idempotent no-op on re-run) |

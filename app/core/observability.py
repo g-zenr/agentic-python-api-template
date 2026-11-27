@@ -1,6 +1,7 @@
 """Optional observability: Sentry and OpenTelemetry (lazy imports; base install works without)."""
 
 import logging
+from typing import Any
 
 from app.core.config import settings
 from app.core.constants import Redaction
@@ -20,7 +21,7 @@ def setup_sentry() -> None:
         )  # noqa: E501
         return
 
-    def before_send(event, hint):
+    def before_send(event: dict[str, Any], hint: object) -> dict[str, Any]:
         request = event.get("request", {})
         request.pop("data", None)
         request.pop("cookies", None)
@@ -34,7 +35,7 @@ def setup_sentry() -> None:
     )
 
 
-def setup_otel(app) -> None:
+def setup_otel(app: object) -> None:
     if not settings.otel_enabled:
         return
     try:

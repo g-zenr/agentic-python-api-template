@@ -1,7 +1,7 @@
 """Email sending: a console backend (dev) and an SMTP backend (prod), swappable in tests."""
 
 import logging
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.core.config import settings
 
@@ -23,7 +23,7 @@ class SmtpSender:
     def __init__(self) -> None:
         import aiosmtplib
 
-        self._lib = aiosmtplib
+        self._lib: Any = aiosmtplib
 
     async def send(self, to: str, subject: str, body: str) -> None:
         await self._lib.send(

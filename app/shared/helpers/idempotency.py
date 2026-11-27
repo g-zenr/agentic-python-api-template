@@ -2,8 +2,9 @@
 
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from prisma.errors import UniqueViolationError
 
@@ -19,7 +20,12 @@ def _hash(payload: Any) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
-async def run_once(scope: str, key: str, request_payload: Any, fn):
+async def run_once(
+    scope: str,
+    key: str,
+    request_payload: Any,
+    fn: Callable[[], Awaitable[tuple[int, Any]]],
+) -> tuple[int, Any, bool]:
     """Run `fn` once per (scope, key). Returns (status_code, data, replay)."""
     request_hash = _hash(request_payload)
     d = current_db().idempotencyrecord
@@ -48,7 +54,9 @@ async def run_once(scope: str, key: str, request_payload: Any, fn):
 
 async def purge_expired() -> int:
     cutoff = utcnow() - timedelta(hours=settings.idempotency_ttl_hours)
-    return await current_db().idempotencyrecord.delete_many(where={"created_at": {"lt": cutoff}})
+    return cast(
+        int, await current_db().idempotencyrecord.delete_many(where={"created_at": {"lt": cutoff}})
+    )
 
 
 IDEMPOTENCY_REPLAY = Header.IDEMPOTENCY_REPLAY

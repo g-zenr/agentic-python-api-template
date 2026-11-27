@@ -1,6 +1,8 @@
 """HTTP middleware: trusted hosts, body-size limit, request context, activity, security headers."""
 
 import time
+from collections.abc import Awaitable, Callable
+from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -15,9 +17,12 @@ from app.core.context import RequestContext, locale_var, request_ctx, request_id
 from app.core.exceptions import error_response
 from app.core.i18n import resolve_locale, t
 from app.core.messages import Msg
+from app.core.metrics import (
+    http_request_duration_seconds,
+    http_requests_total,
+    rate_limit_rejections_total,
+)
 from app.shared.helpers.http import client_ip
-
-_MAX = 2_097_152
 
 
 class _BodyTooLarge(Exception):
@@ -27,24 +32,29 @@ class _BodyTooLarge(Exception):
 class BodyLimitMiddleware:
     """Pure-ASGI body-size limit: rejects by Content-Length and by streamed byte count."""
 
-    def __init__(self, app, max_bytes: int):
+    def __init__(self, app: Callable[..., Awaitable[None]], max_bytes: int) -> None:
         self.app = app
         self.max_bytes = max_bytes
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(
+        self,
+        scope: dict[str, Any],
+        receive: Callable[..., Awaitable[Any]],
+        send: Callable[..., Awaitable[None]],
+    ) -> None:  # noqa: E501
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         headers = {k.lower(): v for k, v in scope["headers"]}
         cl = headers.get(b"content-length")
         if cl is not None and cl.isdigit() and int(cl) > self.max_bytes:
-            await self._reject(send)
+            await self._reject(scope, send)
             return
         total = 0
 
-        async def rcv():
+        async def rcv() -> dict[str, Any]:
             nonlocal total
-            message = await receive()
+            message: dict[str, Any] = await receive()
             if message["type"] == "http.request":
                 total += len(message.get("body", b""))
                 if total > self.max_bytes:
@@ -54,11 +64,11 @@ class BodyLimitMiddleware:
         try:
             await self.app(scope, rcv, send)
         except _BodyTooLarge:
-            await self._reject(send)
+            await self._reject(scope, send)
 
-    async def _reject(self, send):
+    async def _reject(self, scope: dict[str, Any], send: Callable[..., Awaitable[None]]) -> None:
         response = error_response(413, ErrorCode.PAYLOAD_TOO_LARGE, t(Msg.PAYLOAD_TOO_LARGE))
-        await response(scope=None, receive=None, send=send)  # type: ignore[arg-type]
+        await response(scope, receive=None, send=send)  # type: ignore[arg-type]
 
 
 def _security_headers() -> dict[str, str]:
@@ -73,7 +83,7 @@ def _security_headers() -> dict[str, str]:
     return headers
 
 
-async def context_middleware(request: Request, call_next):
+async def context_middleware(request: Request, call_next: Callable[..., Awaitable[Any]]) -> Any:
     rid = request.headers.get(Header.REQUEST_ID) or uuid4().hex
     request_id_var.set(rid)
     locale_var.set(resolve_locale(request.headers.get(Header.LOCALE)))
@@ -83,6 +93,7 @@ async def context_middleware(request: Request, call_next):
     request_ctx.set(ctx)
 
     path = request.url.path
+    started = time.perf_counter()
     if settings.rate_limit_enabled and not _is_exempt(path):
         retry = await cache.rate_hit(
             RateBucket.GLOBAL_IP.value,
@@ -91,6 +102,8 @@ async def context_middleware(request: Request, call_next):
             60,
         )
         if retry:
+            rate_limit_rejections_total.labels(bucket=RateBucket.GLOBAL_IP.value).inc()
+            _record_http_metrics(request, "429", started)
             return error_response(
                 429,
                 ErrorCode.RATE_LIMITED,
@@ -98,17 +111,29 @@ async def context_middleware(request: Request, call_next):
                 headers={Header.RETRY_AFTER: str(retry)},
             )
 
-    started, status = time.perf_counter(), 500
+    status = 500
     try:
         response = await call_next(request)
         status = response.status_code
     finally:
         activity.record_request(request, ctx, status, started)
+        _record_http_metrics(request, str(status), started)
     response.headers[Header.REQUEST_ID] = rid
     response.headers.setdefault(Header.CACHE_CONTROL, CacheControl.NO_STORE)
     for key, value in _security_headers().items():
         response.headers.setdefault(key, value)
     return response
+
+
+def _record_http_metrics(request: Request, status: str, started: float) -> None:
+    """Emit http_requests_total + http_request_duration_seconds using the route TEMPLATE."""
+    route = request.scope.get("route")
+    template = getattr(route, "path", request.url.path)
+    method = request.method
+    http_requests_total.labels(method=method, route=template, status=status).inc()
+    http_request_duration_seconds.labels(method=method, route=template).observe(
+        time.perf_counter() - started
+    )
 
 
 def _is_exempt(path: str) -> bool:

@@ -30,9 +30,15 @@ TrustedHost → BodyLimit → CORS → context (rate limit + security headers).
   whole family (reuse detection).
 - **One-time**: email verification / password reset, single use, hashed.
 
-## RBAC
-`ROLE_PERMISSIONS` maps roles to `Permission`s; `require_permission(...)` guards routes and audits
-denials. `users:read`, `audit:read`, `activity:read`, `jobs:read_all`, `jobs:manage_all`.
+## RBAC + ABAC
+`ROLE_PERMISSIONS` is the baseline. Decisions run through the PDP (`app/core/authz.py`, ADR-0019):
+effective = baseline UNION ALLOW grants MINUS DENY grants (deny always wins), cached per user
+(`permissions:<id>`), invalidated on grant writes. `require_permission(...)` guards routes and
+audits denials (reason: `insufficient_permission` | `permission_denied` | `policy_error`).
+Grants carry optional ABAC conditions (`{"own_only": true}`): they never satisfy route gates alone,
+but authorize self-scoped reads on `/audit` + `/audit/activity` and owner-matched checks in services
+(e.g. `jobs`). Admin API: the `permissions` feature (catalog, effective set, replace/revoke) gated by
+`permissions:manage`. Evaluation errors deny when `AUTHZ_FAIL_CLOSED` (required in prod).
 
 ## Secrets
 Secrets come from env (`SecretStr`), never logged; audit metadata is redacted (`Redaction.FIELDS`);

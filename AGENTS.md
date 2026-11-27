@@ -69,7 +69,7 @@ Read this file fully before changing anything. Deep docs live in `docs/` (start 
 - [ ] `make lint && make test && make feature-check` all pass
 
 ## Commands
-`make install` · `make dev` · `make migrate` · `make test` · `make lint` · `make fmt` · `make docs-check` · `make feature name=<x>` · `make feature-check [name=<x>]` · `make remove-feature name=<x> reason="..." drop_data=<true|false>` · `make worker` · `make typecheck` · `make test-cov` · `make test-integration` · `make security` · `make create-admin email=<x>` · `make mcp-key name=<x>` · `make loadtest`
+`make install` · `make dev` · `make migrate` · `make test` · `make test-speed` · `make test-slo` · `make lint` · `make fmt` · `make docs-check` · `make feature name=<x>` · `make feature-check [name=<x>]` · `make remove-feature name=<x> reason="..." drop_data=<true|false>` · `make worker` · `make typecheck` · `make test-cov` · `make test-integration` · `make security` · `make create-admin email=<x>` · `make mcp-key name=<x>` · `make loadtest`
 
 ## Where things live
 See `docs/03-project-structure.md`. Quick map: `app/core/` framework · `app/shared/` reusable helpers/utils · `app/features/<x>/` business features · `docs/features.md` feature registry · `prisma/schema.prisma` data model · `scripts/` lifecycle tooling · `tests/` tests.

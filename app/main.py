@@ -7,7 +7,9 @@ Adding a job, cached read or audit event never requires editing this file.
 import asyncio
 import logging
 import secrets
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
@@ -28,7 +30,7 @@ from app.core.observability import setup_otel, setup_sentry
 log = logging.getLogger(__name__)
 
 
-async def _shutdown_worker(stop: asyncio.Event, task: asyncio.Task) -> None:  # INFRA
+async def _shutdown_worker(stop: asyncio.Event, task: asyncio.Task[None]) -> None:  # INFRA
     stop.set()
     await task
 
@@ -57,7 +59,7 @@ def create_app() -> FastAPI:
         mcp_app = mcp.streamable_http_app()  # MCP: build before lifespan starts
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with AsyncExitStack() as stack:
             await connect_db()
             stack.push_async_callback(disconnect_db)
@@ -89,7 +91,12 @@ def create_app() -> FastAPI:
         app.include_router(module.router, prefix=settings.api_prefix)
     if settings.metrics_enabled:  # INFRA
 
-        @app.get("/metrics", include_in_schema=False)  # INFRA
+        @app.get(
+            "/metrics",
+            include_in_schema=False,
+            summary="Prometheus metrics",
+            description="Render Prometheus metrics; token-guarded when METRICS_TOKEN is set.",
+        )  # INFRA
         async def metrics(request: Request) -> Response:
             if not _metrics_guard(request):
                 return Response("unauthorized", status_code=401)
@@ -97,7 +104,8 @@ def create_app() -> FastAPI:
             return Response(body, media_type=content_type)
 
     if mcp_app is not None:  # MCP
-        app.mount(settings.mcp_mount_path, ApiKeyGate(mcp_app))  # MCP
+        gate: Any = ApiKeyGate(mcp_app)
+        app.mount(settings.mcp_mount_path, gate)  # MCP
     setup_otel(app)
     return app
 

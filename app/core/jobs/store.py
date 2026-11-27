@@ -8,7 +8,7 @@ reimplements this protocol without touching the worker or the feature. All queri
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import prisma
 from app.core.constants import TERMINAL_JOB_STATUSES, JobStatus
@@ -24,7 +24,7 @@ class JobStore(Protocol):
         self,
         *,
         type: str,
-        payload: dict,
+        payload: dict[str, Any],
         user_id: str | None,
         request_id: str | None,
         max_attempts: int,
@@ -36,7 +36,7 @@ class JobStore(Protocol):
     async def heartbeat(self, job_id: str) -> None: ...
     async def set_progress(self, job_id: str, percent: int) -> None: ...
     async def is_cancel_requested(self, job_id: str) -> bool: ...
-    async def succeed(self, job_id: str, result: dict | None) -> None: ...
+    async def succeed(self, job_id: str, result: dict[str, Any] | None) -> None: ...
     async def fail(self, job_id: str, error: Msg, *, retry_at: datetime | None) -> None: ...
     async def cancelled(self, job_id: str) -> None: ...
     async def reap_stale(self, stale_seconds: int) -> int: ...
@@ -62,7 +62,7 @@ class PrismaJobStore:
         self,
         *,
         type: str,
-        payload: dict,
+        payload: dict[str, Any],
         user_id: str | None,
         request_id: str | None,
         max_attempts: int,
@@ -99,8 +99,10 @@ class PrismaJobStore:
             return []
         placeholders = ", ".join(f"${i + 2}" for i in range(len(types)))
         limit_param = f"${len(types) + 2}"
+        # B608 suppressed below: the f-string interpolates ONLY $n placeholder tokens; worker_id,
+        # every type and the limit are passed as bound parameters to query_raw (nothing inlined).
         sql = (
-            "UPDATE jobs SET status = 'RUNNING'::\"JobStatus\", locked_by = $1, heartbeat_at = now(), "  # noqa: E501
+            "UPDATE jobs SET status = 'RUNNING'::\"JobStatus\", locked_by = $1, heartbeat_at = now(), "  # noqa: E501  # nosec B608
             "started_at = COALESCE(started_at, now()), attempts = attempts + 1, updated_at = now() "
             "WHERE id IN ("
             "SELECT id FROM jobs WHERE status = 'QUEUED'::\"JobStatus\" AND run_at <= now() "
@@ -121,7 +123,7 @@ class PrismaJobStore:
         row = await self.d.find_unique(where={"id": job_id})
         return bool(row and row.cancel_requested)
 
-    async def succeed(self, job_id: str, result: dict | None) -> None:
+    async def succeed(self, job_id: str, result: dict[str, Any] | None) -> None:
         await self.d.update(
             where={"id": job_id},
             data={
@@ -164,7 +166,9 @@ class PrismaJobStore:
             "WHERE status = 'RUNNING'::\"JobStatus\" "
             "AND heartbeat_at < now() - make_interval(secs => $1);"
         )
-        return await current_db().execute_raw(sql, stale_seconds, Msg.INTERNAL_ERROR.value)
+        return cast(
+            int, await current_db().execute_raw(sql, stale_seconds, Msg.INTERNAL_ERROR.value)
+        )
 
     async def get(self, job_id: str) -> JobRecord | None:
         row = await self.d.find_unique(where={"id": job_id})
@@ -189,7 +193,7 @@ class PrismaJobStore:
             where={"id": job_id, "status": JobStatus.QUEUED.value},
             data={"status": JobStatus.CANCELLED.value, "finished_at": utcnow()},
         )
-        return result == 1
+        return cast(int, result) == 1
 
     async def request_cancel(self, job_id: str) -> None:
         await self.d.update(where={"id": job_id}, data={"cancel_requested": True})
@@ -201,7 +205,7 @@ class PrismaJobStore:
                 "finished_at": {"lt": cutoff},
             }
         )
-        return result
+        return cast(int, result)
 
     async def queue_stats(self) -> dict[str, Any]:
         rows = await current_db().query_raw(

@@ -25,7 +25,7 @@ def handlers():
 
 def _handler(fn, *, timeout=JobPolicy.DEFAULT_TIMEOUT, max_attempts=3, payload=None):
     return Handler(
-        type=JobType.NOTES_EXPORT,
+        job_type=JobType.NOTES_EXPORT,
         fn=fn,
         payload_model=payload,
         timeout=timeout,

@@ -5,6 +5,8 @@ audited and transactional; updates use optimistic concurrency (`If-Match`); crea
 `Idempotency-Key`. Responses carry an `ETag` of the note version.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Response, status
 
 from app.core.constants import Header, Tag
@@ -36,7 +38,7 @@ def _etag(version: int) -> str:
 )
 async def create_note(
     response: Response, user: VerifiedUser, payload: NoteCreate, key: IdempotencyKey = None
-) -> ApiResponse:
+) -> ApiResponse[Any]:
     if key:
         status_code, data, replay = await run_once(
             user.id,
@@ -53,7 +55,7 @@ async def create_note(
     return ok(NoteOut.model_validate(note), Msg.NOTE_CREATED)
 
 
-async def _create(user, payload) -> tuple[int, dict]:
+async def _create(user: Any, payload: NoteCreate) -> tuple[int, dict[str, Any]]:
     note = await service.create(user, payload)
     return 201, NoteOut.model_validate(note).model_dump(mode="json")
 
@@ -69,7 +71,7 @@ async def list_notes(
     params: PageParams = Depends(),
     sort: str | None = None,
     q: str | None = None,
-) -> ApiResponse:
+) -> ApiResponse[Any]:
     items, total = await service.list_notes(user, params, sort, q)
     return page_of(items, total, params, schema=NoteOut)
 
@@ -83,7 +85,7 @@ async def list_notes(
 )
 async def export_notes(
     response: Response, user: VerifiedUser, key: IdempotencyKey = None
-) -> ApiResponse:  # noqa: E501
+) -> ApiResponse[Any]:  # noqa: E501
     job = await service.request_export(user, key)
     set_poll_headers(response, job.id)
     return ok(job, Msg.JOB_QUEUED)
@@ -95,7 +97,7 @@ async def export_notes(
     summary="Get a note",
     description="Return one of my notes by id.",
 )
-async def get_note(response: Response, user: VerifiedUser, note_id: str) -> ApiResponse:
+async def get_note(response: Response, user: VerifiedUser, note_id: str) -> ApiResponse[Any]:
     note = await service.get(user, note_id)
     response.headers[Header.ETAG] = _etag(note.version)
     return ok(NoteOut.model_validate(note))
@@ -113,7 +115,7 @@ async def update_note(
     note_id: str,
     payload: NoteUpdate,
     if_match: IfMatch = None,  # noqa: E501
-) -> ApiResponse:
+) -> ApiResponse[Any]:
     expected = parse_if_match(if_match)
     if expected is None:
         raise PreconditionRequiredError(Msg.PRECONDITION_REQUIRED)
@@ -124,10 +126,10 @@ async def update_note(
 
 @router.delete(
     "/{note_id}",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     summary="Delete a note",
     description="Delete one of my notes.",
 )
-async def delete_note(user: VerifiedUser, note_id: str) -> ApiResponse:
+async def delete_note(user: VerifiedUser, note_id: str) -> ApiResponse[Any]:
     await service.delete(user, note_id)
     return ok({"id": note_id}, Msg.DELETED)

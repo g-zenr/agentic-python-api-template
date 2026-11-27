@@ -4,6 +4,7 @@ All handlers are idempotent and safe on any number of workers (the scheduler ded
 """
 
 from datetime import timedelta
+from typing import Any
 
 from app.core import audit
 from app.core.activity.repository import activity_repo
@@ -18,7 +19,7 @@ from app.shared.utils.time import utcnow
 
 
 @job_handler(JobType.PURGE_LOGS, schedule_every=Schedule.HOURLY)
-async def purge_logs(ctx: JobContext) -> dict:
+async def purge_logs(ctx: JobContext) -> dict[str, Any]:
     """Delete activity/audit logs past their retention windows, then record the purge itself."""
     activity_deleted = await activity_repo.purge_before(
         utcnow() - timedelta(days=settings.activity_retention_days)
@@ -37,7 +38,7 @@ async def purge_logs(ctx: JobContext) -> dict:
 
 
 @job_handler(JobType.PURGE_JOBS, schedule_every=Schedule.DAILY)
-async def purge_jobs(ctx: JobContext) -> dict:
+async def purge_jobs(ctx: JobContext) -> dict[str, Any]:
     """Delete finished jobs older than the retention window."""
     cutoff = utcnow() - timedelta(days=settings.job_retention_days)
     deleted = await get_store().purge_finished_before(cutoff)
@@ -45,10 +46,14 @@ async def purge_jobs(ctx: JobContext) -> dict:
 
 
 @job_handler(JobType.PURGE_EXPIRED, schedule_every=Schedule.DAILY)
-async def purge_expired_tokens(ctx: JobContext) -> dict:
-    """Delete expired refresh/one-time tokens and expired idempotency records."""
+async def purge_expired_tokens(ctx: JobContext) -> dict[str, Any]:
+    """Delete expired refresh/one-time tokens, idempotency records, and permission grants."""
     now = utcnow()
     refresh = await refresh_repo.purge(now)
     one_time = await one_time_repo.purge(now)
     idem = await purge_expired()
-    return {"refresh": refresh, "one_time": one_time, "idempotency": idem}
+
+    from app.features.permissions.service import purge_expired as purge_expired_grants
+
+    grants = await purge_expired_grants()
+    return {"refresh": refresh, "one_time": one_time, "idempotency": idem, "grants": grants}

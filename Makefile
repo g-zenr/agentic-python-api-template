@@ -19,6 +19,12 @@ deploy-db:
 test:
 	uv run pytest
 
+test-speed:
+	uv run pytest -m speed
+
+test-slo:
+	uv run pytest -m speed -o addopts=""
+
 test-cov:
 	uv run pytest --cov=app --cov-fail-under=80
 

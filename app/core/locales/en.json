@@ -32,6 +32,8 @@
   "user.email_taken": "That email is already registered.",
   "user.updated": "Profile updated",
   "user.deleted": "Account scheduled for deletion",
+  "permission.not_found": "Permission grant not found.",
+  "permission.updated": "Permissions updated",
   "note.not_found": "Note not found.",
   "note.created": "Note created",
   "note.updated": "Note updated",

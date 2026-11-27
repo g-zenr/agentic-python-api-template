@@ -7,6 +7,7 @@ from prisma.models import User
 
 from app.core.constants import Role
 from app.core.discovery import feature_modules
+from app.core.exceptions import ConflictError
 from app.core.security import hash_password
 from app.features.auth.repository import refresh_repo
 from app.features.users import service
@@ -55,8 +56,19 @@ async def test_create_admin_refuses_without_promote(monkeypatch, audit_sink):
         return _row()
 
     monkeypatch.setattr(users_repo, "find_by_email", found)
-    with pytest.raises(ValueError):
+    with pytest.raises(ConflictError):
         await service.create_admin("a@example.com", "supersecret", promote=False)
+
+
+async def test_create_admin_password_length_typed_error(monkeypatch, audit_sink):
+    from app.core.exceptions import BadInputError
+
+    async def none(email):
+        return None
+
+    monkeypatch.setattr(users_repo, "find_by_email", none)
+    with pytest.raises(BadInputError):
+        await service.create_admin("a@example.com", "x", promote=False)
 
 
 async def test_delete_me_anonymizes(monkeypatch, audit_sink, fake_store):

@@ -5,6 +5,7 @@ Services raise `AppError` subclasses with a `Msg` key. Never raise `HTTPExceptio
 """
 
 import logging
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -62,7 +63,7 @@ class BadInputError(AppError):
 class RateLimitedError(AppError):
     status_code, code, default_msg = 429, ErrorCode.RATE_LIMITED, Msg.RATE_LIMITED
 
-    def __init__(self, retry_after: int, **params: object):
+    def __init__(self, retry_after: int, **params: Any):
         super().__init__(headers={Header.RETRY_AFTER: str(retry_after)}, **params)
         self.retry_after = retry_after
 
@@ -109,23 +110,29 @@ def _error(
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
-    async def _app_error(_: Request, exc: AppError):
-        return _error(exc.status_code, exc.code, t(exc.msg, **exc.params), exc.details, exc.headers)
+    async def _app_error(_: Request, exc: AppError) -> JSONResponse:
+        return _error(
+            exc.status_code,
+            exc.code,
+            t(exc.msg, **cast("dict[str, Any]", exc.params)),
+            exc.details,
+            exc.headers,
+        )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation(_: Request, exc: RequestValidationError):
+    async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
         details = [
             {"field": ".".join(map(str, e["loc"][1:])), "issue": e["msg"]} for e in exc.errors()
         ]
         return _error(422, ErrorCode.VALIDATION, t(Msg.VALIDATION_ERROR), details)
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http(_: Request, exc: StarletteHTTPException):
+    async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         missing = exc.status_code == 404
         code = ErrorCode.NOT_FOUND if missing else ErrorCode.INTERNAL
         return _error(exc.status_code, code, t(Msg.NOT_FOUND if missing else Msg.INTERNAL_ERROR))
 
     @app.exception_handler(Exception)
-    async def _unhandled(_: Request, exc: Exception):
+    async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
         log.exception("unhandled error", exc_info=exc)
         return _error(500, ErrorCode.INTERNAL, t(Msg.INTERNAL_ERROR))
