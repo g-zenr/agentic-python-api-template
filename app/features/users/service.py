@@ -124,9 +124,6 @@ async def create_admin(email: str, password: str, promote: bool) -> None:
                 )
                 user_id = user.id
             await audit.record(AuditAction.ADMIN_BOOTSTRAP, AuditResource.USER, user_id)
-        if existing is not None:  # role changed -> the user's cached grants/baseline is stale
-            from app.core.authz import _load_grants
-
-            await after_commit(lambda: _load_grants.invalidate(existing.id))
+        await after_commit(lambda: find.invalidate(user_id))
     finally:
         request_ctx.reset(ctx_token)
