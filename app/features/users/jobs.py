@@ -77,10 +77,11 @@ async def recover_erasure(ctx: JobContext) -> dict[str, Any]:
     )
     for row in rows:
         await ctx.raise_if_cancelled()
+        recovery_key = f"account-erase-recovery:{row['id']}:{int(utcnow().timestamp()) // 3600}"
         await enqueue(
             JobType.ACCOUNT_ERASE,
             AccountErasePayload(user_id=row["id"]),
             user_id=None,
-            idempotency_key=f"account-erase-recovery:{row['id']}:{int(utcnow().timestamp()) // 3600}",
+            idempotency_key=recovery_key,
         )
     return {"eligible": len(rows)}

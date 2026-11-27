@@ -1,4 +1,4 @@
-"""Fixed-window rate limiting on top of the cache backend. Sensitive buckets fail closed on backend errors."""
+"""Fixed-window rate limiting. Sensitive buckets fail closed on backend errors."""
 
 import hashlib
 from collections.abc import Callable

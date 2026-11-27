@@ -1,7 +1,8 @@
 """Policy Decision Point (PDP): hybrid RBAC + ABAC permission decisions.
 
 Effective access = role baseline ∪ ALLOW grants − DENY grants (a DENY always wins), with
-`expires_at` honoured and optional ABAC conditions on grants. Grants are read directly from the database; backend errors degrade to baseline-only decisions, or deny outright
+`expires_at` honoured and optional ABAC conditions on grants. Grants are read directly from the
+database; backend errors degrade to baseline-only decisions, or deny outright
 when `AUTHZ_FAIL_CLOSED` is set (required in production). Call sites stay unchanged:
 `require_permission` and the services consult this module instead of the raw role matrix.
 
@@ -133,5 +134,4 @@ async def read_scope(user: Any, permission: Permission) -> str | None:
         return "all"
     if key in grants["allow"] and key in grants["scoped_own"]:
         return "own"
-    decision = await evaluate(user, permission)
-    return "all" if decision.allowed else None
+    return "all" if key in grants["allow"] else None

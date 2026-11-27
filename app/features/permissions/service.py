@@ -20,7 +20,12 @@ from app.core.constants import (
     Permission,
     Role,
 )
-from app.core.exceptions import BadInputError, ForbiddenError, NotFoundError, PreconditionFailedError
+from app.core.exceptions import (
+    BadInputError,
+    ForbiddenError,
+    NotFoundError,
+    PreconditionFailedError,
+)
 from app.core.messages import Msg
 from app.core.permissions import ROLE_PERMISSIONS
 from app.core.uow import transaction
@@ -73,7 +78,9 @@ def _validate_grant(grant: GrantIn, cat: CatalogOut) -> None:
     ):
         # H2: a DENY on permissions:manage would let one manager lock out another (deny beats
         # the role baseline). Managing this capability stays role-admin-only.
-        raise BadInputError(Msg.VALIDATION_ERROR, details={"effect": "DENY on permissions:manage"})
+        raise BadInputError(
+            Msg.VALIDATION_ERROR, details={"effect": "DENY on permissions:manage"}
+        )
 
 
 def _is_role_admin(user: User) -> bool:
