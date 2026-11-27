@@ -46,6 +46,8 @@ async def _owned(user: User, job_id: str, *, write: bool = False) -> JobRecord:
         raise NotFoundError(Msg.JOB_NOT_FOUND)
     if job.user_id == user.id:
         return job  # ABAC resource attribute: ownership
+    if job.type == JobType.ACCOUNT_EXPORT.value:
+        raise NotFoundError(Msg.JOB_NOT_FOUND)
     perm = Permission.JOBS_MANAGE_ALL if write else Permission.JOBS_READ_ALL
     decision = await authz.evaluate(user, perm, resource_owner_id=job.user_id)
     if not decision.allowed:
@@ -100,7 +102,7 @@ async def cancel(user: User, job_id: str) -> tuple[JobOut, Msg]:
             AuditAction.JOB_CANCEL,
             AuditResource.JOB,
             job_id,
-            before=before,
-            after=to_out(updated) if updated else None,
+            before={"status": before.status},
+            after={"status": updated.status} if updated else None,
         )
     return to_out(updated) if updated else before, msg
